@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EnforceIQ AI — Bengaluru Parking Intelligence</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="/static/css/style.css?v=1.1"/>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ KPI BAR -->
+<div id="kpi-bar">
+  <div class="kpi-item">
+    <span class="kpi-label">Violations</span>
+    <span class="kpi-value" id="kpi-total">—</span>
+  </div>
+  <div class="kpi-divider"></div>
+  <div class="kpi-item">
+    <span class="kpi-label">Actions Taken</span>
+    <span class="kpi-value" id="kpi-actions">—</span>
+  </div>
+  <div class="kpi-divider"></div>
+  <div class="kpi-item">
+    <span class="kpi-label">Efficiency</span>
+    <span class="kpi-value" id="kpi-efficiency" style="color:#ef4444">—</span>
+  </div>
+  <div class="kpi-null-toast" id="kpi-null-toast">
+    <span class="null-toast-dot"></span>
+    <span id="kpi-null-text">Loading...</span>
+    <button id="null-toast-dismiss" title="Dismiss">✕</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ NAV -->
+<nav id="main-nav">
+  <div class="nav-brand">🅿 EnforceIQ AI</div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" data-tab="map">🗺 MAP</button>
+    <button class="nav-tab" data-tab="predict">🔮 PREDICT</button>
+    <button class="nav-tab" data-tab="patrol">🚔 PATROL</button>
+    <button class="nav-tab" data-tab="interventions">🏗 INTERVENTIONS</button>
+  </div>
+  <button id="tour-btn" onclick="startGuidedTour()">▶ Guided Tour</button>
+</nav>
+
+<!-- Tour overlay (advanced) -->
+<div id="tour-overlay" class="hidden">
+  <!-- Spotlight backdrop -->
+  <div id="tour-backdrop"></div>
+  <div id="tour-box">
+    <!-- Close button -->
+    <button id="tour-close" onclick="stopTour()" title="Exit Tour">✕</button>
+
+    <!-- Header row: step pill + countdown ring -->
+    <div id="tour-header">
+      <div id="tour-step-label">STEP 1 / 7</div>
+      <svg id="tour-countdown-ring" viewBox="0 0 36 36">
+        <circle class="ring-bg" cx="18" cy="18" r="15.9"/>
+        <circle class="ring-fill" id="tour-ring-fill" cx="18" cy="18" r="15.9"
+          stroke-dasharray="100 100" stroke-dashoffset="100"/>
+        <text id="tour-ring-text" x="18" y="22" text-anchor="middle">8</text>
+      </svg>
+    </div>
+
+    <!-- Icon + Title -->
+    <div id="tour-icon-title">
+      <div id="tour-step-icon">🗺</div>
+      <div id="tour-title">—</div>
+    </div>
+
+    <!-- Description -->
+    <div id="tour-desc">—</div>
+
+    <!-- Metric pills injected per step -->
+    <div id="tour-metrics"></div>
+
+    <!-- Progress bar -->
+    <div id="tour-progress">
+      <div id="tour-progress-fill"></div>
+    </div>
+
+    <!-- Step dots -->
+    <div id="tour-dots"></div>
+
+    <!-- Navigation buttons -->
+    <div id="tour-nav">
+      <button id="tour-prev" onclick="tourPrev()">← Prev</button>
+      <button id="tour-next" onclick="tourNext()">Next →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ TAB: MAP -->
+<div id="tab-map" class="tab-content active">
+  <div id="map-layout">
+
+    <!-- filters sidebar -->
+    <div id="filter-panel">
+
+      <!-- ── Section: Filters (collapsible) ── -->
+      <div class="accordion">
+        <button class="accordion-header" data-target="acc-filters">
+          <span>🔍 FILTERS</span>
+          <span class="accordion-arrow">▾</span>
+        </button>
+        <div class="accordion-body open" id="acc-filters">
+          <div class="filter-group">
+            <label>Time of Day: <span id="hour-label">All Hours</span></label>
+            <input type="range" id="hour-slider" min="-1" max="23" value="-1" step="1">
+          </div>
+
+          <div class="filter-group">
+            <label>Day of Week</label>
+            <div class="dow-buttons">
+              <button class="dow-btn active" data-dow="-1">All</button>
+              <button class="dow-btn" data-dow="0">Mon</button>
+              <button class="dow-btn" data-dow="1">Tue</button>
+              <button class="dow-btn" data-dow="2">Wed</button>
+              <button class="dow-btn" data-dow="3">Thu</button>
+              <button class="dow-btn" data-dow="4">Fri</button>
+              <button class="dow-btn" data-dow="5">Sat</button>
+              <button class="dow-btn" data-dow="6">Sun</button>
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <label>Month</label>
+            <select id="month-select">
+              <option value="-1">All Months</option>
+              <option value="11">Nov 2023</option>
+              <option value="12">Dec 2023</option>
+              <option value="1">Jan 2024</option>
+              <option value="2">Feb 2024</option>
+              <option value="3">Mar 2024</option>
+              <option value="4">Apr 2024</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label>Vehicle Type</label>
+            <select id="vehicle-select">
+              <option value="all">All Vehicles</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label>Violation Type</label>
+            <select id="violation-select">
+              <option value="all">All Violations</option>
+            </select>
+          </div>
+
+          <button id="reset-filters">↺ Reset Filters</button>
+        </div>
+      </div>
+
+      <!-- ── Section: Simulation (collapsible, collapsed by default) ── -->
+      <div class="accordion" style="margin-top:8px">
+        <button class="accordion-header" data-target="acc-sim">
+          <span>⚡ SIMULATION</span>
+          <span class="accordion-arrow">▾</span>
+        </button>
+        <div class="accordion-body" id="acc-sim">
+          <div class="sim-clock" id="sim-clock">
+            <span id="sim-time">MON 00:00</span>
+            <span id="sim-status" class="sim-status-idle">IDLE</span>
+          </div>
+          <div class="sim-speed-row">
+            <span class="sim-speed-label">Speed</span>
+            <div class="sim-speed-btns">
+              <button class="sim-speed-btn active" data-speed="1">1×</button>
+              <button class="sim-speed-btn" data-speed="2">2×</button>
+              <button class="sim-speed-btn" data-speed="4">4×</button>
+            </div>
+          </div>
+          <div class="sim-day-row">
+            <span class="sim-speed-label">Day</span>
+            <select id="sim-dow-select">
+              <option value="0">Monday</option>
+              <option value="1">Tuesday</option>
+              <option value="2">Wednesday</option>
+              <option value="3">Thursday</option>
+              <option value="4">Friday</option>
+              <option value="5">Saturday</option>
+              <option value="6">Sunday</option>
+            </select>
+          </div>
+          <div class="sim-btns">
+            <button id="sim-play" class="sim-btn-play">▶ Play</button>
+            <button id="sim-pause" class="sim-btn-pause hidden">⏸ Pause</button>
+            <button id="sim-stop" class="sim-btn-stop">■ Stop</button>
+          </div>
+          <div id="sim-hotspot-bar">
+            <div class="sim-hotspot-title">LIVE HOTSPOT</div>
+            <div id="sim-hotspot-name">—</div>
+            <div id="sim-hotspot-count">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Legend (always visible) ── -->
+      <div class="filter-legend" style="margin-top:12px">
+        <div class="legend-title">Cluster Severity
+          <span class="info-tip" data-tip="LOS = Level of Service. A standard traffic engineering grade. A/B = traffic flows freely. C/D = some slowdowns. E = heavy delays. F = breakdown, severe congestion.">ⓘ</span>
+        </div>
+        <div class="legend-item"><span class="dot red"></span> LOS F (Critical)</div>
+        <div class="legend-item"><span class="dot orange"></span> LOS E (Heavy)</div>
+        <div class="legend-item"><span class="dot yellow"></span> LOS C/D (Moderate)</div>
+        <div class="legend-item"><span class="dot green"></span> LOS A/B (Free flow)</div>
+      </div>
+    </div>
+
+    <!-- map -->
+    <div id="map">
+      <!-- welcome banner — dismissed on first junction click -->
+      <div id="map-welcome-banner">
+        <span>👆 Click any dot to see its parking impact</span>
+        <span class="banner-sep">·</span>
+        <span>▶ Press Play in the sidebar to animate a full day</span>
+        <button id="banner-dismiss">Got it ✕</button>
+      </div>
+
+      <!-- floating layer controller -->
+      <div id="layer-controller">
+        <div class="layer-ctrl-title">MAP LAYERS</div>
+        <label class="layer-toggle">
+          <input type="checkbox" id="toggle-heatmap" checked>
+          <span class="layer-toggle-track"></span>
+          <span class="layer-toggle-label">🌡 Heatmap</span>
+        </label>
+        <label class="layer-toggle">
+          <input type="checkbox" id="toggle-clusters" checked>
+          <span class="layer-toggle-track"></span>
+          <span class="layer-toggle-label">📍 Hotspots</span>
+        </label>
+        <div class="layer-ctrl-sub">Showing critical LOS E/F only</div>
+        <label class="layer-toggle" style="margin-top:4px">
+          <input type="checkbox" id="toggle-all-clusters">
+          <span class="layer-toggle-track"></span>
+          <span class="layer-toggle-label">Show all clusters</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- junction detail panel -->
+    <div id="junction-panel" class="hidden">
+      <div id="jp-header">
+        <button id="jp-close">✕</button>
+        <div id="jp-name">Junction Name</div>
+        <div id="jp-badges">
+          <span id="jp-rank-badge" class="badge badge-gray">—</span>
+          <span id="jp-itype-badge" class="badge">—</span>
+        </div>
+      </div>
+
+      <div id="jp-stats-row">
+        <div class="stat-tile">
+          <div class="stat-val" id="jp-total">—</div>
+          <div class="stat-lbl">Total Violations</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-val" id="jp-peak-hour">—</div>
+          <div class="stat-lbl">Peak Hour</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-val" id="jp-peak-day">—</div>
+          <div class="stat-lbl">Peak Day</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-val" id="jp-vehicle">—</div>
+          <div class="stat-lbl">Top Vehicle</div>
+        </div>
+      </div>
+
+      <!-- Road Impact Card -->
+      <div class="jp-section-title">Road Impact
+        <span class="cite">Karachi 2024 methodology</span>
+        <span class="info-tip" data-tip="Illegal parking physically blocks lanes. This calculates how many lanes are effectively lost at this junction during peak hours, and how many vehicles per hour can't get through.">ⓘ</span>
+      </div>
+      <div id="road-impact-card">
+        <div class="road-viz" id="road-viz">
+          <div class="road-label">Normal</div>
+          <div class="lane-row" id="lane-row">
+            <div class="lane free" id="lane1">Lane 1</div>
+            <div class="lane free" id="lane2">Lane 2</div>
+            <div class="lane free" id="lane3">Lane 3</div>
+          </div>
+          <div class="road-label" id="road-effective-label">Effective: 3.0 lanes</div>
+        </div>
+        <div class="impact-stats">
+          <div class="impact-item">
+            <span class="los-badge" id="jp-los">—</span>
+            <span class="impact-lbl">Level of Service</span>
+          </div>
+          <div class="impact-item">
+            <span class="impact-val" id="jp-lanes">—</span>
+            <span class="impact-lbl">Effective Lanes</span>
+          </div>
+          <div class="impact-item">
+            <span class="impact-val" id="jp-throughput">—</span>
+            <span class="impact-lbl">Vehicles/hr Blocked</span>
+          </div>
+          <div class="impact-item">
+            <span class="impact-val" id="jp-co2">—</span>
+            <span class="impact-lbl">CO₂ kg/hr <span class="cite">Zaragoza 2024</span></span>
+          </div>
+        </div>
+        <div class="capacity-bar-wrap">
+          <div class="capacity-bar-label">Road Capacity Lost</div>
+          <div class="capacity-bar-bg">
+            <div class="capacity-bar-fill" id="capacity-bar-fill"></div>
+            <span class="capacity-bar-pct" id="capacity-bar-pct">0%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Violation breakdown -->
+      <div class="jp-section-title">Violation Breakdown</div>
+      <div id="jp-vtype-chart"></div>
+
+      <!-- Monthly trend -->
+      <div class="jp-section-title">Monthly Trend
+        <span id="jp-chronic-badge" class="hidden badge badge-orange">CHRONIC</span>
+      </div>
+      <div id="jp-trend-chart"></div>
+
+      <!-- Enforcement gap -->
+      <div class="jp-section-title">Enforcement Gap</div>
+      <div id="jp-null-rate">
+        <span class="big-pct" id="jp-null-pct">—</span>
+        <span class="big-pct-label">of violations have no follow-through</span>
+      </div>
+
+      <!-- Deterrence decay -->
+      <div class="jp-section-title">How Fast Violations Return
+        <span class="cite">Montreal MVTOP 2024</span>
+        <span class="info-tip" data-tip="After a patrol visit, illegal parking stops temporarily — but drivers come back. This shows how many minutes until violations rebuild at this junction.">ⓘ</span>
+      </div>
+      <div id="jp-decay-text">—</div>
+
+      <!-- Recommendation -->
+      <div class="jp-recommendation" id="jp-recommendation">
+        <div id="jp-rec-text">—</div>
+        <div id="jp-precedent" class="jp-precedent">—</div>
+        <div id="jp-impact" class="jp-impact">—</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ TAB: PREDICT -->
+<div id="tab-predict" class="tab-content hidden">
+  <div id="predict-layout">
+    <div id="predict-controls">
+      <div class="filter-title">PREDICT VIOLATIONS</div>
+      <div class="filter-group">
+        <label>Predict for Hour: <span id="pred-hour-label">9:00</span></label>
+        <input type="range" id="pred-hour" min="0" max="23" value="9" step="1">
+      </div>
+      <div class="filter-group">
+        <label>Day of Week</label>
+        <div class="dow-buttons">
+          <button class="dow-btn pred-dow active" data-dow="0">Mon</button>
+          <button class="dow-btn pred-dow" data-dow="1">Tue</button>
+          <button class="dow-btn pred-dow" data-dow="2">Wed</button>
+          <button class="dow-btn pred-dow" data-dow="3">Thu</button>
+          <button class="dow-btn pred-dow" data-dow="4">Fri</button>
+          <button class="dow-btn pred-dow" data-dow="5">Sat</button>
+          <button class="dow-btn pred-dow" data-dow="6">Sun</button>
+        </div>
+      </div>
+      <div class="predict-note">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+          <span class="badge badge-green" style="font-size:8px;padding:2px 6px;">ACTIVE</span>
+          <span style="font-weight:700;color:#f1f5f9;font-size:10px;">LightGBM Model</span>
+        </div>
+        Predictions powered by an optimized 5-fold LightGBM ensemble model trained on 5 months of
+        violation data (248k records, 168 junctions). Features include temporal patterns,
+        junction identity, and historical aggregates.
+        <span id="predict-model-metrics" style="color:#22c55e;display:block;margin-top:4px;"></span>
+      </div>
+
+      <div class="filter-title" style="margin-top:20px">TOP 5 PREDICTED HOTSPOTS</div>
+      <div id="predict-list"></div>
+    </div>
+    <div id="predict-map"></div>
+
+    <!-- Prediction detail panel (slides in on circle click) -->
+    <div id="pred-detail-panel" class="hidden">
+      <button id="pred-detail-close">✕</button>
+      <div id="pred-detail-itype-wrap">
+        <span id="pred-detail-itype" class="badge">—</span>
+      </div>
+      <div id="pred-detail-name">—</div>
+      <div id="pred-detail-loc">—</div>
+      <div id="pred-detail-divider"></div>
+      <div id="pred-detail-count-wrap">
+        <span id="pred-detail-icon">🔮</span>
+        <div>
+          <div id="pred-detail-count">—</div>
+          <div id="pred-detail-count-label">Predicted violations this hour</div>
+        </div>
+      </div>
+      <div id="pred-detail-divider2"></div>
+      <div class="pred-detail-section-title">RECOMMENDED ACTION</div>
+      <div id="pred-detail-rec">—</div>
+      <div id="pred-detail-impact" class="pred-detail-impact">—</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ TAB: PATROL -->
+<div id="tab-patrol" class="tab-content hidden">
+  <div id="patrol-layout">
+    <div id="patrol-controls">
+      <div class="filter-title">PATROL OPTIMIZER</div>
+      <div class="filter-group">
+        <label>Patrol Units: <span id="units-label">4</span></label>
+        <input type="range" id="units-slider" min="1" max="8" value="4" step="1">
+      </div>
+
+      <!-- Advanced settings in collapsible accordion -->
+      <div class="accordion" style="margin-bottom:10px">
+        <button class="accordion-header open" data-target="acc-patrol-adv">
+          <span>⚙ Advanced Settings</span>
+          <span class="accordion-arrow">▾</span>
+        </button>
+        <div class="accordion-body open" id="acc-patrol-adv">
+          <div class="filter-group">
+            <label>Shift Start</label>
+            <select id="shift-start">
+              <option value="6">06:00</option>
+              <option value="7">07:00</option>
+              <option value="8">08:00</option>
+              <option value="9" selected>09:00</option>
+              <option value="10">10:00</option>
+              <option value="14">14:00</option>
+              <option value="16">16:00</option>
+              <option value="18">18:00</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>Shift Duration</label>
+            <div class="duration-btns">
+              <button class="dur-btn" data-dur="4">4h</button>
+              <button class="dur-btn" data-dur="6">6h</button>
+              <button class="dur-btn active" data-dur="8">8h</button>
+            </div>
+          </div>
+          <div class="filter-group">
+            <label>Starting Station</label>
+            <select id="station-select">
+              <option>Upparpet</option>
+              <option>Shivajinagar</option>
+              <option>Malleshwaram</option>
+              <option>HAL Old Airport</option>
+              <option>City Market</option>
+              <option>Vijayanagara</option>
+              <option>Rajajinagar</option>
+              <option>Kodigehalli</option>
+              <option>Magadi Road</option>
+              <option>Jeevanbheemanagar</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <button id="generate-routes" class="primary-btn">⚡ Generate Optimal Routes</button>
+
+      <!-- Unit spotlight chips — shown after routes are generated -->
+      <div id="patrol-unit-filter-group" style="margin-top:12px;display:none">
+        <label class="filter-group" style="font-size:10px;color:#64748b;letter-spacing:1px;font-weight:700;margin-bottom:6px">SPOTLIGHT UNIT</label>
+        <div id="patrol-unit-chips" style="display:flex;flex-wrap:wrap;gap:5px">
+          <!-- chips injected by JS -->
+        </div>
+        <!-- hidden select kept for JS compatibility -->
+        <select id="patrol-unit-select" style="display:none">
+          <option value="all">Show All Units</option>
+        </select>
+      </div>
+
+      <div class="filter-group" style="margin-top:10px">
+        <label>Coverage Threshold
+          <span class="info-tip" data-tip="How many junctions to target. Tight = focus on worst spots only. Wide = cover more area. Based on parameter p from Kim et al. 2023 hotspot policing research.">ⓘ</span>
+        </label>
+        <div class="duration-btns">
+          <button class="cov-thresh-btn" data-p="0.2">Tight</button>
+          <button class="cov-thresh-btn active" data-p="0.4">Balanced</button>
+          <button class="cov-thresh-btn" data-p="0.65">Wide</button>
+        </div>
+      </div>
+
+      <div class="patrol-explain">
+        Officers are routed to highest-impact junctions first, then sent back before violations rebuild — not when the shift pattern says so.
+      </div>
+      <div class="patrol-algo-note">
+        Route sequences optimized via Genetic Algorithm
+        <span class="cite">Kim et al., Heliyon 2023</span>
+      </div>
+
+      <!-- Coverage comparison -->
+      <div id="coverage-section" class="hidden">
+        <div class="coverage-title">Coverage Comparison</div>
+        <div class="coverage-row">
+          <span class="cov-label">Fixed Shift</span>
+          <div class="cov-bar-bg">
+            <div class="cov-bar-fill cov-baseline" id="cov-baseline-bar"></div>
+          </div>
+          <span class="cov-pct" id="cov-baseline-pct">—</span>
+        </div>
+        <div class="coverage-row">
+          <span class="cov-label">Optimized</span>
+          <div class="cov-bar-bg">
+            <div class="cov-bar-fill cov-optimized" id="cov-optimized-bar"></div>
+          </div>
+          <span class="cov-pct" id="cov-optimized-pct">—</span>
+        </div>
+        <div id="coverage-tagline"></div>
+      </div>
+    </div>
+
+    <div id="patrol-right">
+      <!-- ── Patrol simulation bar ── -->
+      <div id="patrol-sim-bar" class="hidden">
+        <div id="patrol-sim-clock">
+          <span id="patrol-sim-time">09:00</span>
+          <span id="patrol-sim-status" class="sim-status-idle">IDLE</span>
+        </div>
+        <div id="patrol-sim-controls">
+          <button id="patrol-sim-play"  class="sim-btn-play">▶ Play</button>
+          <button id="patrol-sim-pause" class="sim-btn-pause hidden">⏸ Pause</button>
+          <button id="patrol-sim-stop"  class="sim-btn-stop">■ Stop</button>
+          <div class="sim-speed-btns" style="margin-left:auto">
+            <button class="patrol-speed-btn active" data-speed="1">1×</button>
+            <button class="patrol-speed-btn" data-speed="2">2×</button>
+            <button class="patrol-speed-btn" data-speed="4">4×</button>
+          </div>
+        </div>
+      </div>
+      <div id="patrol-map"></div>
+      <div id="itinerary-section" class="hidden">
+        <div class="filter-title">PATROL ITINERARY</div>
+        <table id="itinerary-table">
+          <thead>
+            <tr>
+              <th>Unit</th>
+              <th>Junction</th>
+              <th>Arrive</th>
+              <th>Depart</th>
+              <th>Revisit</th>
+              <th>Predicted</th>
+              <th>LOS</th>
+            </tr>
+          </thead>
+          <tbody id="itinerary-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ TAB: INTERVENTIONS -->
+<div id="tab-interventions" class="tab-content hidden">
+  <div id="interventions-layout">
+
+    <div id="intervention-summary">
+      <div class="int-count-card orange" id="int-restructure-card">
+        <div class="int-count" id="int-restructure-count">—</div>
+        <div class="int-count-label">RESTRUCTURE</div>
+        <div class="int-count-sub">Build infrastructure</div>
+      </div>
+      <div class="int-count-card blue" id="int-enforce-card">
+        <div class="int-count" id="int-enforce-count">—</div>
+        <div class="int-count-label">ENFORCE</div>
+        <div class="int-count-sub">Increase patrol</div>
+      </div>
+      <div class="int-count-card red" id="int-process-card">
+        <div class="int-count" id="int-process-count">—</div>
+        <div class="int-count-label">PROCESS FIX</div>
+        <div class="int-count-sub">Fix the pipeline</div>
+      </div>
+    </div>
+
+    <div id="intervention-filters">
+      <button class="int-filter-btn active" data-filter="all">All</button>
+      <button class="int-filter-btn" data-filter="RESTRUCTURE">RESTRUCTURE</button>
+      <button class="int-filter-btn" data-filter="ENFORCE">ENFORCE</button>
+      <button class="int-filter-btn" data-filter="PROCESS FIX">PROCESS FIX</button>
+    </div>
+
+    <div id="city-impact-banner"></div>
+    <div id="intervention-grid"></div>
+  </div>
+</div>
+
+<!-- scripts -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script src="/static/js/main.js"></script>
+</body>
+</html>

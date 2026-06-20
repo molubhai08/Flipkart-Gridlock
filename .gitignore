@@ -1,0 +1,29 @@
+# Bytecode / Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Environments
+.env
+.venv
+venv/
+ENV/
+env/
+
+# IDEs and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Large Data files (can be regenerated with preprocess.py)
+# Ignore local logs or checkpoints
+.system_generated/
+logs/
+*.log
+
+# Unnecessary text files
+enforceiq_ai_project_brief.txt
+results.txt
+

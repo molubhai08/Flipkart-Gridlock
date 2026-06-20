@@ -1,0 +1,160 @@
+================================================================================
+ENFORCEIQ AI — COMPREHENSIVE FEATURES & ARCHITECTURE SPECIFICATION
+================================================================================
+
+This document details all technical features, algorithms, schemas, APIs, and
+design components of the EnforceIQ AI platform.
+
+--------------------------------------------------------------------------------
+1. TECH STACK & SYSTEM ARCHITECTURE
+--------------------------------------------------------------------------------
+- Backend: FastAPI (Python 3.12+), Uvicorn server.
+- Data Processing: Pandas, NumPy, Scikit-learn, Parquet.
+- Machine Learning: LightGBM (5-Fold Cross-Validated Ensemble).
+- Geospatial Processing: HDBSCAN / DBSCAN (density-based spatial clustering).
+- Frontend: Single Page Application (SPA).
+  - Leaflet.js (Interactive Maps & Heatmaps).
+  - Vanilla JS, CSS3 (Modern dark-mode glassmorphic theme).
+  - SVG dynamically rendered charts.
+
+--------------------------------------------------------------------------------
+2. DATA PREPROCESSING & DATA-DRIVED HOTSPOTS (preprocess.py)
+--------------------------------------------------------------------------------
+- Geospatial Clustering (HDBSCAN):
+  - Automatically clusters 298k raw violation points into data-derived zones rather
+    than relying on 168 pre-labeled police junctions.
+  - Parameters: min_cluster_size=50, min_samples=5, metric='haversine' (spherical).
+  - Generates 300–1000 clusters (currently 1,022). Discards sparse noise points.
+- Cluster Naming Heuristic:
+  - Associates each centroid with the nearest named police junction within 300m:
+    Format: "{junction_name} [C{cluster_id}]".
+  - If no named junction is within 300m, falls back to geospatial coordinate zone:
+    Format: "Zone_{cluster_id} · {latitude}°N {longitude}°E".
+
+--------------------------------------------------------------------------------
+3. ANALYTICAL MODELS & METHODOLOGIES
+--------------------------------------------------------------------------------
+- Level of Service (LOS) - Karachi Traffic Congestion Methodology:
+  - Applies penalty weights to violation types: Double Parking (3.0), Main Road
+    Parking (2.5), Parking Near Crossing (2.0), Near Traffic Light/Zebra Cross (2.0),
+    Wrong Parking (1.5), No Parking (1.0), Footpath/Bus-Stop Parking (0.8).
+  - Effective lanes computed dynamically relative to violation severity:
+    effective_lanes = Assumed 3.0 Lanes - min(peak_weighted_violations / 500, 2.5).
+  - Grades: A (>=2.7), B (>=2.3), C (>=1.8), D (>=1.4), E (>=1.0), F (<1.0).
+  - Computes capacity lost (%) and throughput loss (vehicles/hour).
+- Carbon Footprint - Zaragoza Emissions Methodology:
+  - co2_kg_per_hour = peak_hour_count * 4.5 * 0.066 kg.
+- Intervention Classifier:
+  - RESTRUCTURE: Chronic hotspot (low month-to-month variation) with >60% two-wheelers.
+    Recommends structural dedicated parking zones (Precedent: Zaragoza / D.C. studies).
+  - PROCESS FIX: Enforcement gap (unactioned / NULL validation rate) > 60%.
+    Recommends digital evidence chains (Precedent: Manila STAG NCAP).
+  - ENFORCE: Standard hotspots. Recommends patrol frequency optimization.
+- Deterrence Decay (Montreal MVTOP Model):
+  - Computes median time gap (between 5 and 240 mins) of daily sequential violations.
+  - Determines how long an officer's presence deters new violations (decay window).
+
+--------------------------------------------------------------------------------
+4. MACHINE LEARNING ENGINE (LightGBM)
+--------------------------------------------------------------------------------
+- Framework: 5-Fold Cross-Validated LightGBM Ensemble.
+- Features: hour, dow, month, is_weekend, is_business_hour, near_peak, log_junction_total,
+  junc_hour_mean, junc_dow_mean, junc_hour_std, junc_global_mean, junc_mean_loo.
+- Performance Metrics: R² (R-squared) score, Mean Absolute Error (MAE).
+- Caching Contract:
+  - Outputs are pre-compiled to predictions.json for immediate O(1) retrieval (<5ms).
+  - Live query inferences (with month seasonality parameters) are cached at the
+    request-level using functools.lru_cache.
+
+--------------------------------------------------------------------------------
+5. ROUTE OPTIMIZATION ENGINE (Genetic Algorithm)
+--------------------------------------------------------------------------------
+- GA Optimization (Kim et al., Heliyon 2023):
+  - Dynamically assigns and schedules patrol unit routes for a given shift.
+  - Physical Capping Constraints: Computes physical max stops based on 15m dwell
+    time + 10m travel time per stop to prevent unrealistic schedules.
+  - Algorithm Workflow:
+    1. Allocation: Distributes top hotspots to patrol units via round-robin rank-sorting.
+    2. Initialization: Random permutation routes per unit.
+    3. Fitness: Total Coverage / (Euclidean Route Distance + 1e-6).
+    4. Selection: Roulette Wheel Selection based on route fitness.
+    5. Crossover: Ordered Crossover (OX) operator (preserves TSP relative path sequence).
+    6. Mutation: Swap mutation (15% rate) swapping two random stops.
+    7. Sequence optimization runs for 120 generations with a population size of 40.
+  - Timetable Builder: Outputs chronologically ordered timetables (Arrival, Dwell,
+    Departure, and Re-visit times adjusted by cluster decay window).
+
+--------------------------------------------------------------------------------
+6. API ENDPOINTS SPECIFICATION (app.py)
+--------------------------------------------------------------------------------
+- GET /
+  Serves the core dashboard HTML interface.
+- GET /api/kpis
+  Returns global database KPIs (total violations, actioned rate) and ML metrics.
+- GET /api/filter-options
+  Returns list of unique vehicle types and violation types for UI dropdowns.
+- GET /api/heatmap
+  Returns coordinates & counts aggregated by hour/dow/month/filters for Leaflet heatmap.
+- GET /api/junctions
+  Returns summary metadata of all clusters (name, location, total count, LOS, class).
+- GET /api/junction/{junction_name:path}
+  Returns detailed metadata, trends, vehicle counts, and recommendations for a cluster.
+- GET /api/predict
+  Returns top-10 predicted hotspots from the O(1) predictions.json cache.
+- GET /api/predict/live
+  Triggers live ensemble LightGBM predictions for specified hour/dow/month.
+- GET /api/model-info
+  Returns current LightGBM model details (R2, MAE, feature importance, cache status).
+- POST /api/patrol/optimize
+  Takes start hour, duration, station name, threshold, unit count, and returns the
+  GA-optimized routes and timetables.
+- GET /api/interventions
+  Returns intervention breakdown summary and full list of sorted chronic hotspots.
+
+--------------------------------------------------------------------------------
+7. INTERACTIVE FRONTEND UI FEATURES
+--------------------------------------------------------------------------------
+- Global KPIs Bar: Instant overview of operations and ML metrics.
+- Tab 1: Map (Analytics)
+  - Blended heatmap overlay with density controls.
+  - Dynamic scale-sized markers color-coded by intervention type.
+  - Cluster Info Drawer:
+    - Lane Congestion Simulator: Animates dynamic lanes blockades based on LOS.
+    - SVG Monthly Trend Chart & vehicle type breakdown bar.
+    - CO2 emissions calculator card.
+    - Precedent-backed intervention policies and recommendation text.
+- Tab 2: Predict (Forecasting)
+  - Slider for Hour, button selectors for Day of Week.
+  - Left panel: Top 5 predicted hotspots.
+  - Interactive prediction map with Leaflet heatmap.
+  - Large Clickable hot spots: Clicking prediction circles slides open a right-side
+    panel, making a live query to fetch recommendations, coordinates, and ML counts
+    directly on the predict page without switching tabs.
+- Tab 3: Patrol (Command & Control)
+  - Inputs: Patrol unit count, shift start hour, shift duration, starting police
+    station, and coverage parameters.
+  - Generates interactive, color-coded itineraries for each active squad.
+  - Plots optimized travel routes and checkpoints on the map per squad.
+
+--------------------------------------------------------------------------------
+8. RESEARCH CITATIONS IN THE PRODUCT
+--------------------------------------------------------------------------------
+- Karachi 2024 Traffic Congestion Study
+  - Used for: Level of Service (LOS) grade, lane reduction, and throughput loss formula.
+  - Where: Map Tab → Junction Details Panel → Road Impact section.
+- Zaragoza 2024 Curbside HCE Model
+  - Used for: CO2 footprint / excess emissions estimate formula.
+  - Where: Map Tab → Junction Details Panel → CO2 field.
+- Montreal MVTOP 2024 Model
+  - Used for: Deterrence decay window estimation and patrol revisit intervals scheduling.
+  - Where: Map Tab → Junction Details Panel ("How Fast Violations Return"), Patrol Tab → Itinerary Table.
+- Kim et al. Heliyon 2023 Study
+  - Used for: Genetic Algorithm optimization framework, parameter p hotspot extraction, roulette wheel selection, and ordered crossover sequence optimization.
+  - Where: Patrol Tab → Optimization Engine.
+- Washington D.C. parkDC 2019 Study
+  - Used for: RESTRUCTURE intervention classification and dedicated two-wheeler zone recommendations templates.
+  - Where: Interventions Tab & Junction Details → RESTRUCTURE cards.
+- Metro Manila STAG NCAP 2025 Protocol
+  - Used for: PROCESS FIX intervention classification and digital evidence chains recommendations templates.
+  - Where: Interventions Tab & Junction Details → PROCESS FIX cards.
+================================================================================
