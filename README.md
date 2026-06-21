@@ -2,13 +2,16 @@
 
 ### Flipkart Gridlock 2.0 · Problem Statement 1 · Technical Research Submission
 
-&nbsp;&nbsp;[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=flat-square&logo=python&logoColor=white)](#) &nbsp;[![Scikit-Learn](https://img.shields.io/badge/Scikit--Learn-Machine%20Learning-F7931E?style=flat-square&logo=scikit-learn&logoColor=white)](#) &nbsp;[![LightGBM](https://img.shields.io/badge/LightGBM-Spatiotemporal%20Forecasting-00A3A0?style=flat-square&logo=scipy&logoColor=white)](#) &nbsp;[![HDBSCAN](https://img.shields.io/badge/HDBSCAN-Spatial%20Clustering-DFB317?style=flat-square)](#) &nbsp;[![Leaflet](https://img.shields.io/badge/Leaflet-Geospatial%20Mapping-2C5E3B?style=flat-square&logo=leaflet&logoColor=white)](#)  
-&nbsp;&nbsp;[![Genetic Algorithm](https://img.shields.io/badge/Genetic%20Algorithm-Route%20Optimization-8A2BE2?style=flat-square)](#)
-
+[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=flat-square&logo=python&logoColor=white)](#)
+[![Scikit-Learn](https://img.shields.io/badge/Scikit--Learn-Machine%20Learning-F7931E?style=flat-square&logo=scikit-learn&logoColor=white)](#)
+[![LightGBM](https://img.shields.io/badge/LightGBM-Spatiotemporal%20Forecasting-00A3A0?style=flat-square&logo=scipy&logoColor=white)](#)
+[![HDBSCAN](https://img.shields.io/badge/HDBSCAN-Spatial%20Clustering-DFB317?style=flat-square)](#)
+[![Leaflet](https://img.shields.io/badge/Leaflet-Geospatial%20Mapping-2C5E3B?style=flat-square&logo=leaflet&logoColor=white)](#)
+[![Genetic Algorithm](https://img.shields.io/badge/Genetic%20Algorithm-Route%20Optimization-8A2BE2?style=flat-square)](#)
 
 ---
 
-🌍 **[View Live Deployment Dashboard](#reproduction--execution)** | 📄 **[Read the Full Technical Specification](file:///c:/Users/SARTHAK/Desktop/flipkart/round2/parkwatch/enforceiq_ai_project_brief.txt)**
+🌍 [View Live Deployment Dashboard](#reproduction--execution) | 📄 [Read the Full Technical Specification](file:///c:/Users/SARTHAK/Desktop/flipkart/round2/parkwatch/enforceiq_ai_project_brief.txt)
 
 ---
 
