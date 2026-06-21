@@ -43,22 +43,64 @@ On-street illegal parking and spillover near commercial corridors, metro station
 EnforceIQ connects spatial clustering, transport engineering, supervised forecasting, and metaheuristic optimization in a unified operational dashboard.
 
 ```mermaid
-graph TD
-    A[ASTRAM Violation Records 298,450 Rows] --> B[Data Cleaning & Filtering]
-    B --> C[HDBSCAN Geospatial Clustering]
-    C -->|1,022 Hotspots Extracted| D[Analytical Impact Quantification]
-    D -->|Karachi Level of Service| E1[Lane Reduction & LOS Grade]
-    D -->|Zaragoza HCE Model| E2[Excess CO2 Emissions]
+graph TB
+    %% Styling configurations
+    classDef ingestion fill:#1f2937,stroke:#3b82f6,stroke-width:2px,color:#fff;
+    classDef processing fill:#1f2937,stroke:#a855f7,stroke-width:2px,color:#fff;
+    classDef ml_analytics fill:#1f2937,stroke:#10b981,stroke-width:2px,color:#fff;
+    classDef optimization fill:#1f2937,stroke:#f59e0b,stroke-width:2px,color:#fff;
+    classDef dashboard fill:#1f2937,stroke:#ef4444,stroke-width:2px,color:#fff;
+
+    subgraph INGESTION["I. DATA INTAKE LAYER"]
+        A1["ASTRAM Violations (298,450 records)"]:::ingestion
+        A2["ASTRAM Incidents (8,173 records)"]:::ingestion
+    end
+
+    subgraph SPATIAL["II. GEOSPATIAL & ANALYTICAL PIPELINE"]
+        B1["DBSCAN/HDBSCAN Clustering"]:::processing
+        B2["Junction Cross-Reference (300m Bounding)"]:::processing
+        B3["Karachi LOS Formula"]:::processing
+        B4["Zaragoza HCE Model"]:::processing
+        
+        B1 --> B2
+        B2 --> B3
+        B2 --> B4
+    end
+
+    subgraph PREDICTIVE["III. MACHINE LEARNING ENGINE"]
+        C1["Spatiotemporal Feature Prep"]:::ml_analytics
+        C2["5-Fold LightGBM Ensemble"]:::ml_analytics
+        C3["Static Cache & live LRU Inference"]:::ml_analytics
+        
+        C1 --> C2
+        C2 --> C3
+    end
+
+    subgraph ROUTING["IV. PRESCRIPTIVE DISPATCH ENGINE"]
+        D1["Montreal Deterrence Decay Gap"]:::optimization
+        D2["Genetic Algorithm (OX Crossover & Mutation)"]:::optimization
+        
+        D1 --> D2
+    end
+
+    subgraph PRESENTATION["V. COMMAND & CONTROL HUB"]
+        E1["Interactive Leaflet Dashboard"]:::dashboard
+        E2["Operational Squad Schedules"]:::dashboard
+    end
+
+    %% Cross-layer links
+    A1 --> B1
+    A1 --> C1
+    A2 --> B2
     
-    A --> F[Temporal Feature Engineering]
-    F --> G[5-Fold LightGBM Ensemble]
-    G -->|predictions.json Cache| H[Spatiotemporal Predictor Engine]
+    B3 --> D2
+    C3 --> D2
     
-    H --> I[Genetic Algorithm Route Optimizer]
-    E1 --> I
-    I -->|Ordered Crossover & Swap Mutation| J[Squad Dispatch & Revisit Schedules]
-    J --> K[Command & Control Dashboard]
+    D2 --> E2
+    B3 --> E1
+    C3 --> E1
 ```
+
 
 ### 1. Spatial Clustering (Hotspot Detection)
 Instead of aggregating coordinates by rigid, pre-defined administrative wards, EnforceIQ applies **HDBSCAN** (Hierarchical Density-Based Spatial Clustering of Applications with Noise) to raw GPS coordinates. 
