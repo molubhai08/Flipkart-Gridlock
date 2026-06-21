@@ -193,12 +193,12 @@ def get_junctions():
     ]
 
 
-@app.get("/api/junction/{junction_name:path}")
-def get_junction(junction_name: str):
-    data = JUNCTIONS.get(junction_name)
+@app.get("/api/junction")
+def get_junction(name: str):
+    data = JUNCTIONS.get(name)
     if not data:
         return {"error": "not found"}
-    return {**data, "decay_minutes": DECAY.get(junction_name)}
+    return {**data, "decay_minutes": DECAY.get(name)}
 
 
 # ── PREDICT — primary endpoint (O(1) cache lookup) ───────────────────────────

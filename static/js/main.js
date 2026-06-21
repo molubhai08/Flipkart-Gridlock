@@ -370,7 +370,7 @@ function setupLayerController() {
 // ── Junction panel ────────────────────────────────────────
 async function openJunctionPanel(junctionName) {
   const d = await fetch(
-    `${BASE}/api/junction/${encodeURIComponent(junctionName)}`
+    `${BASE}/api/junction?name=${encodeURIComponent(junctionName)}`
   ).then(r => r.json());
 
   // Sort all junctions desc by total_violations to find rank
@@ -655,7 +655,7 @@ async function openPredDetail(p) {
 
   // Fetch full junction data to get recommendation & estimated impact
   try {
-    const jd = await fetch(`${BASE}/api/junction/${encodeURIComponent(p.name)}`).then(r => r.json());
+    const jd = await fetch(`${BASE}/api/junction?name=${encodeURIComponent(p.name)}`).then(r => r.json());
     document.getElementById('pred-detail-rec').textContent    = jd.recommendation || '—';
     document.getElementById('pred-detail-impact').textContent = jd.estimated_impact ? '⭐ ' + jd.estimated_impact : '';
   } catch (err) {
