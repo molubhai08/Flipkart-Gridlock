@@ -28,6 +28,25 @@ Processing 298,450 anonymized violation records from the ASTRAM Traffic Manageme
 
 ---
 
+## Key Innovations
+
+We decouple structural traffic bottlenecks from
+random noise, enabling precise hotspot detection
+with minimal manual oversight.
+
+By caching LightGBM ensemble predictions, we reduce
+API latency from seconds to milliseconds while
+preserving high predictive accuracy.
+
+Our Genetic Algorithm optimizes patrol routing,
+achieving massive efficiency improvements
+over traditional enforcement sweeps.
+
+This pipeline scales to new urban grids without
+requiring extensive patrol resources.
+
+---
+
 ## Operational Challenge & Problem Formulation
 
 ### The Problem
