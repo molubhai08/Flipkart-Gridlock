@@ -12,7 +12,8 @@ const state = {
   vehicleType: 'all', violationType: 'all',
   predHour: 9, predDow: 0,
   patrolUnits: 4, shiftStart: 9, shiftDuration: 8,
-  patrolStation: 'Upparpet', coverageThreshold: 0.4
+  patrolStation: 'Upparpet', coverageThreshold: 0.4,
+  heatmapWeightMode: 'volume'
 };
 
 // ── Map instances ─────────────────────────────────────────
@@ -98,6 +99,64 @@ function setupUIInteractions() {
   document.getElementById('null-toast-dismiss')?.addEventListener('click', () => {
     document.getElementById('kpi-null-toast').classList.add('dismissed');
   });
+
+  // Export Itinerary Copy Summary
+  document.getElementById('export-itinerary-btn')?.addEventListener('click', exportDispatchSummary);
+}
+
+function exportDispatchSummary() {
+  if (!patrolDataGlobal || !patrolDataGlobal.units) {
+    alert("Please generate optimal routes first!");
+    return;
+  }
+  let summary = `📋 *ENFORCEIQ — PATROL DISPATCH SUMMARY*\n`;
+  summary += `--------------------------------------------------\n`;
+  summary += `Algorithm:  ${patrolDataGlobal.algorithm}\n`;
+  summary += `Base Station: ${state.patrolStation}\n`;
+  summary += `Shift Span:   ${String(state.shiftStart).padStart(2, '0')}:00 for ${state.shiftDuration} hours\n`;
+  summary += `GA Coverage:  ${patrolDataGlobal.total_coverage_pct}%\n`;
+  summary += `Baseline Coverage: ${patrolDataGlobal.baseline_fixed_shift_pct}%\n`;
+  summary += `--------------------------------------------------\n\n`;
+
+  patrolDataGlobal.units.forEach(unit => {
+    summary += `🚔 *PATROL SQUAD ${unit.unit_id}* (Coverage: ${unit.unit_coverage_pct}%)\n`;
+    if (!unit.route || unit.route.length === 0) {
+      summary += `  • No checkpoints assigned.\n`;
+    } else {
+      unit.route.forEach((stop, i) => {
+        summary += `  ${i+1}. [${stop.arrive} - ${stop.depart}] ${stop.junction}\n`;
+        summary += `     • Action: ${stop.intervention_type} (LOS ${stop.los_grade})\n`;
+        summary += `     • Predicted Violations/hr: ${stop.predicted_violations}\n`;
+        summary += `     • Revisit Target: ${stop.revisit_at}\n`;
+      });
+    }
+    summary += `\n`;
+  });
+
+  navigator.clipboard.writeText(summary).then(() => {
+    // Open mailto with summary as body
+    const email  = prompt('Enter officer email address to send dispatch to:');
+    if (!email) return;
+    const subject = encodeURIComponent('EnforceIQ Patrol Dispatch Summary');
+    const body    = encodeURIComponent(summary);
+    window.open(`mailto:${email}?subject=${subject}&body=${body}`, '_blank');
+
+    const btn = document.getElementById('export-itinerary-btn');
+    const origText = btn.innerHTML;
+    btn.textContent = '✓ Opening Mail...';
+    btn.style.background = '#22c55e';
+    setTimeout(() => {
+      btn.innerHTML = origText;
+      btn.style.background = '#3b82f6';
+    }, 2500);
+  }).catch(() => {
+    // Fallback if clipboard fails — open mailto directly
+    const email  = prompt('Enter officer email address to send dispatch to:');
+    if (!email) return;
+    const subject = encodeURIComponent('EnforceIQ Patrol Dispatch Summary');
+    const body    = encodeURIComponent(summary);
+    window.open(`mailto:${email}?subject=${subject}&body=${body}`, '_blank');
+  });
 }
 
 // ── Filter options ────────────────────────────────────────
@@ -129,7 +188,26 @@ async function updateHeatmap() {
     violation_type: state.violationType,
   });
   const data = await fetch(`${BASE}/api/heatmap?${params}`).then(r => r.json());
-  const points = data.map(p => [p.lat, p.lon, p.weight]);
+  
+  // Build a 3dp lookup mapping for cluster capacity_lost_pct
+  const congestionMap = new Map();
+  if (junctionData && junctionData.length > 0) {
+    junctionData.forEach(j => {
+      const key = `${j.lat.toFixed(3)},${j.lon.toFixed(3)}`;
+      congestionMap.set(key, j.capacity_lost_pct || 0);
+    });
+  }
+
+  const points = data.map(p => {
+    let weightMultiplier = 1.0;
+    if (state.heatmapWeightMode === 'congestion') {
+      const key = `${p.lat.toFixed(3)},${p.lon.toFixed(3)}`;
+      const loss = congestionMap.get(key) || 0;
+      // Map 0-100% capacity loss to a multiplier range of 0.2 to 5.0
+      weightMultiplier = 0.2 + (loss / 100) * 4.8;
+    }
+    return [p.lat, p.lon, p.weight * weightMultiplier];
+  });
   mainHeatLayer.setLatLngs(points);
 
   // Only update circle sizes when a real filter is active.
@@ -262,6 +340,31 @@ function setupLayerController() {
 
   toggleClusters?.addEventListener('change', renderJunctionMarkers);
   toggleAllClusters?.addEventListener('change', renderJunctionMarkers);
+
+  const hmVolBtn = document.getElementById('hm-mode-vol');
+  const hmConBtn = document.getElementById('hm-mode-con');
+
+  hmVolBtn?.addEventListener('click', () => {
+    state.heatmapWeightMode = 'volume';
+    hmVolBtn.classList.add('active');
+    hmVolBtn.style.background = '#1e293b';
+    hmVolBtn.style.color = '#f1f5f9';
+    hmConBtn.classList.remove('active');
+    hmConBtn.style.background = 'none';
+    hmConBtn.style.color = '#64748b';
+    updateHeatmap();
+  });
+
+  hmConBtn?.addEventListener('click', () => {
+    state.heatmapWeightMode = 'congestion';
+    hmConBtn.classList.add('active');
+    hmConBtn.style.background = '#1e293b';
+    hmConBtn.style.color = '#f1f5f9';
+    hmVolBtn.classList.remove('active');
+    hmVolBtn.style.background = 'none';
+    hmVolBtn.style.color = '#64748b';
+    updateHeatmap();
+  });
 }
 
 // ── Junction panel ────────────────────────────────────────
@@ -801,7 +904,15 @@ function updatePatrolTrackingMarkers(currentMin) {
     if (currentMin < shiftStartMin || currentMin >= shiftEndMin) return;
 
     const color = UNIT_COLORS[(unit.unit_id - 1) % UNIT_COLORS.length];
-    let lat, lon, label;
+    let lat, lon, label, returning = false;
+
+    // Resolve base station coordinates for return journey
+    const stationName = unit.starting_station || state.patrolStation || 'Upparpet';
+    const stationJ = junctionData.find(j =>
+      j.name === stationName ||
+      j.name.toLowerCase().includes(stationName.toLowerCase()) ||
+      stationName.toLowerCase().includes(j.name.toLowerCase())
+    );
 
     for (let i = 0; i < unit.route.length; i++) {
       const stop    = unit.route[i];
@@ -835,6 +946,22 @@ function updatePatrolTrackingMarkers(currentMin) {
           break;
         }
       }
+
+      // ── Return journey: after last stop's depart time ────────────────────
+      if (i === unit.route.length - 1) {
+        const lastDepMin = hhmmToMin(stop.depart);
+        if (currentMin >= lastDepMin && stationJ) {
+          const j1 = junctionData.find(j => j.name === stop.junction);
+          if (j1) {
+            const returnDuration = Math.max(shiftEndMin - lastDepMin, 1);
+            const t = Math.min((currentMin - lastDepMin) / returnDuration, 1);
+            lat   = j1.lat + (stationJ.lat - j1.lat) * t;
+            lon   = j1.lon + (stationJ.lon - j1.lon) * t;
+            label = `<b>Unit ${unit.unit_id}</b><br>🏠 Returning to base<br><small style="opacity:0.8">${stationName}</small>`;
+            returning = true;
+          }
+        }
+      }
     }
 
     if (lat === undefined) return;
@@ -842,11 +969,12 @@ function updatePatrolTrackingMarkers(currentMin) {
     const carIcon = L.divIcon({
       className: '',
       html: `<div style="
-        background:${color};color:#fff;
+        background:${returning ? '#6b7280' : color};color:#fff;
         width:26px;height:26px;border-radius:7px;display:flex;
         align-items:center;justify-content:center;
         border:2px solid #fff;animation:pulse-glow 1.5s infinite;
-        font-size:14px;cursor:pointer;">🚔</div>`,
+        font-size:14px;cursor:pointer;
+        ${returning ? 'opacity:0.8;' : ''}">${returning ? '🏠' : '🚔'}</div>`,
       iconSize:   [26, 26],
       iconAnchor: [13, 13],
     });
@@ -1362,7 +1490,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupSimulation();
   setupPatrolSimulation();
   setupUIInteractions();
-
+  setupLayerController();
 
   await Promise.all([
     loadKPIs(),

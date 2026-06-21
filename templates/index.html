@@ -229,6 +229,13 @@
           <span class="layer-toggle-track"></span>
           <span class="layer-toggle-label">🌡 Heatmap</span>
         </label>
+        <div id="heatmap-mode-container" style="margin-left: 24px; margin-top: 4px; display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
+          <span style="font-size: 8px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Weight Metric</span>
+          <div style="display: flex; background: #0f172a; border-radius: 4px; border: 1px solid #334155; padding: 2px; width: 140px;">
+            <button id="hm-mode-vol" class="active" style="flex: 1; border: none; background: #1e293b; color: #f1f5f9; font-size: 8px; font-weight: bold; cursor: pointer; padding: 2px 4px; border-radius: 2px;">Violations</button>
+            <button id="hm-mode-con" style="flex: 1; border: none; background: none; color: #64748b; font-size: 8px; font-weight: bold; cursor: pointer; padding: 2px 4px; border-radius: 2px;">Congestion</button>
+          </div>
+        </div>
         <label class="layer-toggle">
           <input type="checkbox" id="toggle-clusters" checked>
           <span class="layer-toggle-track"></span>
@@ -541,7 +548,12 @@
       </div>
       <div id="patrol-map"></div>
       <div id="itinerary-section" class="hidden">
-        <div class="filter-title">PATROL ITINERARY</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div class="filter-title" style="margin:0">PATROL ITINERARY</div>
+          <button id="export-itinerary-btn" style="background: #3b82f6; border: none; color: #fff; font-size: 9px; padding: 4px 10px; border-radius: 4px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; text-transform: uppercase; letter-spacing: 0.5px;">
+            📤 Copy Dispatch Summary
+          </button>
+        </div>
         <table id="itinerary-table">
           <thead>
             <tr>
