@@ -155,6 +155,11 @@ Patrol scheduling is modeled as a constrained optimization problem. Instead of t
   * *Crossover*: Ordered Crossover (OX) to preserve relative path sequences.
   * *Mutation*: Swap mutation (15% rate).
 
+### 5. Automated Dispatch & Communication
+To bridge the gap between AI generation and real-world execution, EnforceIQ features an automated dispatch prototype:
+* **Direct-to-Authority Emailing**: Once the Genetic Algorithm finalizes the most efficient patrol routes, the system automatically compiles and emails the exact step-by-step itineraries directly to the relevant police authorities and patrol squads.
+* **Closing the Action Loop**: This ensures the predictive intelligence doesn't just sit on a dashboard, but is actively pushed to the officers on the ground who can clear the bottlenecks.
+
 ---
 
 ## Repository Structure
