@@ -72,11 +72,15 @@ if _predictions_path.exists():
 # Load model.pkl for live inference (optional — used only by /api/predict/live)
 _model_path = DATA_DIR / "model.pkl"
 if _model_path.exists():
-    with open(_model_path, "rb") as f:
-        MODEL_DATA = pickle.load(f)
-    print(f"✓ LightGBM 5-fold ensemble loaded  "
-          f"R²={MODEL_DATA.get('r2', '?')}  MAE={MODEL_DATA.get('mae', '?')}")
-    print(f"  Features: {MODEL_DATA.get('features', [])}")
+    try:
+        with open(_model_path, "rb") as f:
+            MODEL_DATA = pickle.load(f)
+        print(f"✓ LightGBM 5-fold ensemble loaded  "
+              f"R²={MODEL_DATA.get('r2', '?')}  MAE={MODEL_DATA.get('mae', '?')}")
+        print(f"  Features: {MODEL_DATA.get('features', [])}")
+    except Exception as e:
+        print(f"⚠ Failed to load model.pkl ({e}) — live inference unavailable, serving from cache only")
+        MODEL_DATA = None
 else:
     print("⚠  model.pkl not found — live inference unavailable, serving from cache only")
 
