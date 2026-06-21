@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pandas
+numpy
+pyarrow
+scikit-learn
+lightgbm
+hdbscan
