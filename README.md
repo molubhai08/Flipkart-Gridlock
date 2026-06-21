@@ -11,7 +11,7 @@
 
 ---
 
-🌍 [View Live Deployment Dashboard](#reproduction--execution) | 📄 [Read the Full Technical Specification](file:///c:/Users/SARTHAK/Desktop/flipkart/round2/parkwatch/enforceiq_ai_project_brief.txt)
+🌍 [View Live Deployment Dashboard](https://enforceiq-rust.vercel.app/) | 📄 [Read the Full Technical Specification](file:///c:/Users/SARTHAK/Desktop/flipkart/round2/parkwatch/enforceiq_ai_project_brief.txt)
 
 ---
 
