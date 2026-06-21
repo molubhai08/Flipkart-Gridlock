@@ -2,7 +2,9 @@
 
 ### Flipkart Gridlock 2.0 · Problem Statement 1 · Technical Research Submission
 
-`FastAPI` · `LightGBM` · `HDBSCAN` · `Genetic Algorithm` · `Leaflet.js` · `Vanilla CSS`
+&nbsp;&nbsp;[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=flat-square&logo=python&logoColor=white)](#) &nbsp;[![Scikit-Learn](https://img.shields.io/badge/Scikit--Learn-Machine%20Learning-F7931E?style=flat-square&logo=scikit-learn&logoColor=white)](#) &nbsp;[![LightGBM](https://img.shields.io/badge/LightGBM-Spatiotemporal%20Forecasting-00A3A0?style=flat-square&logo=scipy&logoColor=white)](#) &nbsp;[![HDBSCAN](https://img.shields.io/badge/HDBSCAN-Spatial%20Clustering-DFB317?style=flat-square)](#) &nbsp;[![Leaflet](https://img.shields.io/badge/Leaflet-Geospatial%20Mapping-2C5E3B?style=flat-square&logo=leaflet&logoColor=white)](#)  
+&nbsp;&nbsp;[![Genetic Algorithm](https://img.shields.io/badge/Genetic%20Algorithm-Route%20Optimization-8A2BE2?style=flat-square)](#)
+
 
 ---
 
