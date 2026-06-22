@@ -27,3 +27,9 @@ logs/
 enforceiq_ai_project_brief.txt
 results.txt
 
+# SVG assets & dashboards
+astram_architecture.svg
+stats_dashboard/
+ml_results_dashboard/
+
+

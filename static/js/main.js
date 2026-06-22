@@ -52,6 +52,16 @@ const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.pn
 const TILE_ATTR  = '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>';
 const BENGALURU  = [12.9716, 77.5946];
 
+// ── Smart tile layer: Mappls if ready, else CartoDB dark ──────────────────
+function smartTileLayer() {
+  // getBaseTileLayer is defined in mappls-init.js and returns Mappls tiles
+  // if the SDK loaded successfully, else falls back to OSM/CartoDB.
+  if (typeof window.getBaseTileLayer === 'function') {
+    return window.getBaseTileLayer('standard');
+  }
+  return L.tileLayer(DARK_TILES, { attribution: TILE_ATTR });
+}
+
 // ── Map initialisation ────────────────────────────────────
 // Only init mainMap on page load.
 // predictMap and patrolMap are init lazily when their tabs open
@@ -59,21 +69,21 @@ const BENGALURU  = [12.9716, 77.5946];
 
 function initMainMap() {
   mainMap = L.map('map', { zoomControl: true }).setView(BENGALURU, 12);
-  L.tileLayer(DARK_TILES, { attribution: TILE_ATTR }).addTo(mainMap);
+  smartTileLayer().addTo(mainMap);
   mainHeatLayer = L.heatLayer([], { radius: 25, blur: 20, maxZoom: 17, max: 10 }).addTo(mainMap);
 }
 
 function initPredictMap() {
   if (predictMap) { predictMap.invalidateSize(); return; }
   predictMap = L.map('predict-map', { zoomControl: true }).setView(BENGALURU, 12);
-  L.tileLayer(DARK_TILES, { attribution: TILE_ATTR }).addTo(predictMap);
+  smartTileLayer().addTo(predictMap);
   predictHeatLayer = L.heatLayer([], { radius: 25, blur: 20, maxZoom: 17, max: 2 }).addTo(predictMap);
 }
 
 function initPatrolMap() {
   if (patrolMap) { patrolMap.invalidateSize(); return; }
   patrolMap = L.map('patrol-map', { zoomControl: true }).setView(BENGALURU, 12);
-  L.tileLayer(DARK_TILES, { attribution: TILE_ATTR }).addTo(patrolMap);
+  smartTileLayer().addTo(patrolMap);
 }
 
 // ── KPI bar ───────────────────────────────────────────────
@@ -1841,4 +1851,426 @@ function stopTour() {
   clearTimeout(tourTimer);
   document.getElementById('tour-overlay').classList.add('hidden');
   document.getElementById('tour-btn').textContent = '▶ Guided Tour';
+}
+
+/* =========================================================
+   BILINGUAL SUPPORT — Full App Translation
+   English / ಕನ್ನಡ (Kannada)
+   Every visible text element in the UI is translated here.
+   ========================================================= */
+
+const I18N = {
+  en: {
+    // ── Nav ──
+    tabMap: '🗺 MAP', tabPredict: '🔮 PREDICT',
+    tabPatrol: '🚔 PATROL', tabInterventions: '🏗 INTERVENTIONS',
+    langBtn: 'ಕನ್ನಡ', tourBtn: '▶ Guided Tour',
+    kpiViolations: 'Violations', kpiActions: 'Actions Taken', kpiEfficiency: 'Efficiency',
+    filterSectionBtn: '🔍 FILTERS',
+    filterTimeLabel: 'Time of Day:', filterAllHours: 'All Hours',
+    filterDayLabel: 'Day of Week',
+    filterMonthLabel: 'Month', filterAllMonths: 'All Months',
+    filterVehicleLabel: 'Vehicle Type', filterAllVehicles: 'All Vehicles',
+    filterViolationLabel: 'Violation Type', filterAllViolations: 'All Violations',
+    filterReset: '↺ Reset Filters',
+    dowAll: 'All', dowMon: 'Mon', dowTue: 'Tue', dowWed: 'Wed',
+    dowThu: 'Thu', dowFri: 'Fri', dowSat: 'Sat', dowSun: 'Sun',
+    dowMonFull: 'Monday', dowTueFull: 'Tuesday', dowWedFull: 'Wednesday',
+    dowThuFull: 'Thursday', dowFriFull: 'Friday', dowSatFull: 'Saturday', dowSunFull: 'Sunday',
+    simSectionBtn: '⚡ SIMULATION',
+    simSpeed: 'Speed', simDay: 'Day',
+    simPlay: '▶ Play', simPause: '⏸ Pause', simStop: '■ Stop',
+    simLiveHotspot: 'LIVE HOTSPOT',
+    legendTitle: 'Cluster Severity',
+    legendF: 'LOS F (Critical)', legendE: 'LOS E (Heavy)',
+    legendCD: 'LOS C/D (Moderate)', legendAB: 'LOS A/B (Free flow)',
+    mapLayers: 'MAP LAYERS',
+    layerHeatmap: '🌡 Heatmap', layerHotspots: '📍 Hotspots',
+    layerShowAll: 'Show all clusters',
+    layerCtrlSub: 'Showing critical LOS E/F only',
+    mapStyle: 'MAP STYLE', mapStandard: 'STANDARD', mapHybrid: 'HYBRID',
+    bannerClick: '👆 Click any dot to see its parking impact',
+    bannerPlay: '▶ Press Play in the sidebar to animate a full day',
+    bannerDismiss: 'Got it ✕',
+    jpStatTotal: 'Total Violations', jpStatPeak: 'Peak Hour',
+    jpStatDay: 'Peak Day', jpStatVehicle: 'Top Vehicle',
+    jpRoadImpact: 'Road Impact', jpNormal: 'Normal',
+    jpLOS: 'Level of Service', jpLanes: 'Effective Lanes',
+    jpThroughput: 'Vehicles/hr Blocked', jpCapLost: 'Road Capacity Lost',
+    jpViolBreakdown: 'Violation Breakdown', jpMonthlyTrend: 'Monthly Trend',
+    jpEnfGap: 'Enforcement Gap', jpNullLabel: 'of violations have no follow-through',
+    jpDecayTitle: 'How Fast Violations Return',
+    jpLWRTitle: 'Traffic Shockwave',
+    jpQueueLbl: 'Queue km', jpShockLbl: 'Shockwave km/h', jpSpeedLbl: 'Bottleneck speed',
+    predTitle: 'PREDICT VIOLATIONS', predHourLabel: 'Predict for Hour:',
+    predDayLabel: 'Day of Week', predTop5: 'TOP 5 PREDICTED HOTSPOTS',
+    predDetailAction: 'RECOMMENDED ACTION',
+    patrolTitle: 'PATROL OPTIMIZER', patrolUnitsLabel: 'Patrol Units:',
+    patrolAdvSettings: '⚙ Advanced Settings',
+    patrolShiftStart: 'Shift Start', patrolShiftDur: 'Shift Duration',
+    patrolStation: 'Starting Station',
+    generateRoutes: '⚡ Generate Optimal Routes',
+    patrolSpotlight: 'SPOTLIGHT UNIT', patrolCoverage: 'Coverage Threshold',
+    covTight: 'Tight', covBalanced: 'Balanced', covWide: 'Wide',
+    patrolExplain: 'Officers are routed to highest-impact junctions first, then sent back before violations rebuild — not when the shift pattern says so.',
+    patrolAlgoNote: 'Route sequences optimized via Genetic Algorithm',
+    covTitle: 'Coverage Comparison', covFixed: 'Fixed Shift', covOptimized: 'Optimized',
+    patrolItinerary: 'PATROL ITINERARY',
+    itinUnit: 'Unit', itinJunction: 'Junction', itinArrive: 'Arrive',
+    itinDepart: 'Depart', itinRevisit: 'Revisit', itinPredicted: 'Predicted', itinLOS: 'LOS',
+    dispatchTitle: '📧 Email Route to Officer / Station',
+    dispatchPlaceholder: 'officer@btp.kar.gov.in', dispatchSend: 'Send Route',
+    intRestructure: 'RESTRUCTURE', intRestructureSub: 'Build infrastructure',
+    intEnforce: 'ENFORCE', intEnforceSub: 'Increase patrol',
+    intProcess: 'PROCESS FIX', intProcessSub: 'Fix the pipeline',
+    intFilterAll: 'All', intFilterRestructure: 'RESTRUCTURE',
+    intFilterEnforce: 'ENFORCE', intFilterProcess: 'PROCESS FIX',
+  },
+  kn: {
+    tabMap: '🗺 ನಕ್ಷೆ', tabPredict: '🔮 ಮುನ್ಸೂಚನೆ',
+    tabPatrol: '🚔 ಗಸ್ತು', tabInterventions: '🏗 ಕ್ರಮಗಳು',
+    langBtn: 'English', tourBtn: '▶ ಮಾರ್ಗದರ್ಶಿ',
+    kpiViolations: 'ಉಲ್ಲಂಘನೆಗಳು', kpiActions: 'ತೆಗೆದ ಕ್ರಮಗಳು', kpiEfficiency: 'ದಕ್ಷತೆ',
+    filterSectionBtn: '🔍 ಫಿಲ್ಟರ್‌ಗಳು',
+    filterTimeLabel: 'ದಿನದ ಸಮಯ:', filterAllHours: 'ಎಲ್ಲ ಗಂಟೆ',
+    filterDayLabel: 'ವಾರದ ದಿನ',
+    filterMonthLabel: 'ತಿಂಗಳು', filterAllMonths: 'ಎಲ್ಲ ತಿಂಗಳು',
+    filterVehicleLabel: 'ವಾಹನ ವಿಧ', filterAllVehicles: 'ಎಲ್ಲ ವಾಹನ',
+    filterViolationLabel: 'ಉಲ್ಲಂಘನೆ ವಿಧ', filterAllViolations: 'ಎಲ್ಲ ಉಲ್ಲಂಘನೆ',
+    filterReset: '↺ ಮರುಹೊಂದಿಸಿ',
+    dowAll: 'ಎಲ್ಲ', dowMon: 'ಸೋಮ', dowTue: 'ಮಂಗಳ', dowWed: 'ಬುಧ',
+    dowThu: 'ಗುರು', dowFri: 'ಶುಕ್ರ', dowSat: 'ಶನಿ', dowSun: 'ಭಾನು',
+    dowMonFull: 'ಸೋಮವಾರ', dowTueFull: 'ಮಂಗಳವಾರ', dowWedFull: 'ಬುಧವಾರ',
+    dowThuFull: 'ಗುರುವಾರ', dowFriFull: 'ಶುಕ್ರವಾರ', dowSatFull: 'ಶನಿವಾರ', dowSunFull: 'ಭಾನುವಾರ',
+    simSectionBtn: '⚡ ಸಿಮ್ಯುಲೇಶನ್',
+    simSpeed: 'ವೇಗ', simDay: 'ದಿನ',
+    simPlay: '▶ ಆಟ', simPause: '⏸ ನಿಲ್ಲಿಸಿ', simStop: '■ ನಿಲ್ಲು',
+    simLiveHotspot: 'ಲೈವ್ ಹಾಟ್‌ಸ್ಪಾಟ್',
+    legendTitle: 'ಕ್ಲಸ್ಟರ್ ತೀವ್ರತೆ',
+    legendF: 'LOS F (ಗಂಭೀರ)', legendE: 'LOS E (ಭಾರ)',
+    legendCD: 'LOS C/D (ಮಧ್ಯಮ)', legendAB: 'LOS A/B (ಮುಕ್ತ ಹರಿವು)',
+    mapLayers: 'ನಕ್ಷೆ ಪದರ',
+    layerHeatmap: '🌡 ಶಾಖ ನಕ್ಷೆ', layerHotspots: '📍 ಹಾಟ್‌ಸ್ಪಾಟ್',
+    layerShowAll: 'ಎಲ್ಲ ಕ್ಲಸ್ಟರ್ ತೋರಿಸಿ',
+    layerCtrlSub: 'LOS E/F ಮಾತ್ರ ತೋರಿಸಲಾಗುತ್ತಿದೆ',
+    mapStyle: 'ನಕ್ಷೆ ಶೈಲಿ', mapStandard: 'ಸಾಮಾನ್ಯ', mapHybrid: 'ಹೈಬ್ರಿಡ್',
+    bannerClick: '👆 ಪಾರ್ಕಿಂಗ್ ಪ್ರಭಾವ ನೋಡಲು ಯಾವುದೇ ಚುಕ್ಕಿ ಕ್ಲಿಕ್ ಮಾಡಿ',
+    bannerPlay: '▶ ಪೂರ್ಣ ದಿನ ನೋಡಲು ಪ್ಲೇ ಒತ್ತಿ',
+    bannerDismiss: 'ಸರಿ ✕',
+    jpStatTotal: 'ಒಟ್ಟು ಉಲ್ಲಂಘನೆ', jpStatPeak: 'ಉತ್ತುಂಗ ಗಂಟೆ',
+    jpStatDay: 'ಉತ್ತುಂಗ ದಿನ', jpStatVehicle: 'ಮೇಲ್ಮಟ್ಟ ವಾಹನ',
+    jpRoadImpact: 'ರಸ್ತೆ ಪ್ರಭಾವ', jpNormal: 'ಸಾಮಾನ್ಯ',
+    jpLOS: 'ಸೇವಾ ಮಟ್ಟ', jpLanes: 'ಪರಿಣಾಮಕಾರಿ ಪಥ',
+    jpThroughput: 'ವಾಹನ/ಗಂಟೆ ತಡೆ', jpCapLost: 'ರಸ್ತೆ ಸಾಮರ್ಥ್ಯ ನಷ್ಟ',
+    jpViolBreakdown: 'ಉಲ್ಲಂಘನೆ ವಿವರ', jpMonthlyTrend: 'ಮಾಸಿಕ ಪ್ರವೃತ್ತಿ',
+    jpEnfGap: 'ಜಾರಿ ಅಂತರ', jpNullLabel: 'ಉಲ್ಲಂಘನೆಗಳಿಗೆ ಮುಂದಿನ ಕ್ರಮ ಇಲ್ಲ',
+    jpDecayTitle: 'ಉಲ್ಲಂಘನೆ ಎಷ್ಟು ಬೇಗ ಮರಳುತ್ತದೆ',
+    jpLWRTitle: 'ಸಂಚಾರ ಆಘಾತ ತರಂಗ',
+    jpQueueLbl: 'ಸಾಲು ಕಿ.ಮೀ', jpShockLbl: 'ಆಘಾತ ಕಿ.ಮೀ/ಗಂ', jpSpeedLbl: 'ಕುತ್ತಿಗೆ ವೇಗ',
+    predTitle: 'ಉಲ್ಲಂಘನೆ ಮುನ್ಸೂಚನೆ', predHourLabel: 'ಗಂಟೆಗಾಗಿ ಮುನ್ಸೂಚನೆ:',
+    predDayLabel: 'ವಾರದ ದಿನ', predTop5: 'ಅಗ್ರ 5 ಹಾಟ್‌ಸ್ಪಾಟ್',
+    predDetailAction: 'ಶಿಫಾರಸು ಕ್ರಮ',
+    patrolTitle: 'ಗಸ್ತು ಮಾರ್ಗ ಆಯ್ಕೆ', patrolUnitsLabel: 'ಗಸ್ತು ತಂಡ:',
+    patrolAdvSettings: '⚙ ಸುಧಾರಿತ ಸೆಟ್ಟಿಂಗ್',
+    patrolShiftStart: 'ಶಿಫ್ಟ್ ಆರಂಭ', patrolShiftDur: 'ಶಿಫ್ಟ್ ಅವಧಿ',
+    patrolStation: 'ಆರಂಭ ಠಾಣೆ',
+    generateRoutes: '⚡ ಅತ್ಯುತ್ತಮ ಮಾರ್ಗ ರಚಿಸಿ',
+    patrolSpotlight: 'ಸ್ಪಾಟ್‌ಲೈಟ್ ತಂಡ', patrolCoverage: 'ವ್ಯಾಪ್ತಿ ಮಿತಿ',
+    covTight: 'ಕಡಿಮೆ', covBalanced: 'ಸಮತೋಲ', covWide: 'ವಿಶಾಲ',
+    patrolExplain: 'ಅಧಿಕಾರಿಗಳನ್ನು ಮೊದಲು ಹೆಚ್ಚು ಪ್ರಭಾವದ ಜಂಕ್ಷನ್‌ಗಳಿಗೆ ಕಳುಹಿಸಲಾಗುತ್ತದೆ.',
+    patrolAlgoNote: 'ಮಾರ್ಗ ಕ್ರಮ ಜೆನೆಟಿಕ್ ಅಲ್ಗಾರಿದಮ್ ಮೂಲಕ ಆಯ್ಕೆ',
+    covTitle: 'ವ್ಯಾಪ್ತಿ ಹೋಲಿಕೆ', covFixed: 'ನಿಗದಿ ಶಿಫ್ಟ್', covOptimized: 'ಅತ್ಯುತ್ತಮ',
+    patrolItinerary: 'ಗಸ್ತು ಕಾರ್ಯಕ್ರಮ',
+    itinUnit: 'ತಂಡ', itinJunction: 'ಜಂಕ್ಷನ್', itinArrive: 'ಬರುವ',
+    itinDepart: 'ಹೋಗುವ', itinRevisit: 'ಮರು ಭೇಟಿ', itinPredicted: 'ಮುನ್ಸೂಚಿತ', itinLOS: 'LOS',
+    dispatchTitle: '📧 ಅಧಿಕಾರಿಗೆ ಮಾರ್ಗ ಕಳುಹಿಸಿ',
+    dispatchPlaceholder: 'adhikari@btp.kar.gov.in', dispatchSend: 'ಕಳುಹಿಸಿ',
+    intRestructure: 'ಮರುರಚನೆ', intRestructureSub: 'ಮೂಲಸೌಕರ್ಯ ನಿರ್ಮಿಸಿ',
+    intEnforce: 'ಜಾರಿ', intEnforceSub: 'ಗಸ್ತು ಹೆಚ್ಚಿಸಿ',
+    intProcess: 'ಪ್ರಕ್ರಿಯೆ ಸರಿ', intProcessSub: 'ಪೈಪ್‌ಲೈನ್ ಸರಿಪಡಿಸಿ',
+    intFilterAll: 'ಎಲ್ಲ', intFilterRestructure: 'ಮರುರಚನೆ',
+    intFilterEnforce: 'ಜಾರಿ', intFilterProcess: 'ಪ್ರಕ್ರಿಯೆ ಸರಿ',
+  }
+};
+
+let currentLang = 'en';
+
+function _t(id, key, lang)  { const e=document.getElementById(id); if(e&&I18N[lang][key]!==undefined) e.textContent=I18N[lang][key]; }
+function _ts(sel, key, lang) { const e=document.querySelector(sel); if(e&&I18N[lang][key]!==undefined) e.textContent=I18N[lang][key]; }
+function _tt(sel, key, lang) {
+  const e=document.querySelector(sel); if(!e||I18N[lang][key]===undefined) return;
+  for(const n of e.childNodes){ if(n.nodeType===Node.TEXT_NODE&&n.textContent.trim()){ n.textContent=I18N[lang][key]+' '; return; } }
+}
+
+function applyTranslations(lang) {
+  const d = I18N[lang]; if (!d) return;
+  // Nav (data-i18n)
+  document.querySelectorAll('[data-i18n]').forEach(el=>{ const k=el.getAttribute('data-i18n'); if(d[k]!==undefined) el.textContent=d[k]; });
+  // Tour / lang
+  _t('tour-btn','tourBtn',lang);
+  const lb=document.getElementById('lang-toggle-btn');
+  if(lb){ lb.textContent=d.langBtn; lb.className=lang==='kn'?'lang-btn active-kn':'lang-btn'; }
+  // Brand
+  const bEn=document.getElementById('brand-en'), bKn=document.getElementById('brand-kn');
+  if(bEn) bEn.style.display=lang==='en'?'':'none';
+  if(bKn) bKn.style.display=lang==='kn'?'':'none';
+  // KPI
+  const kl=document.querySelectorAll('.kpi-label');
+  if(kl[0]) kl[0].textContent=d.kpiViolations;
+  if(kl[1]) kl[1].textContent=d.kpiActions;
+  if(kl[2]) kl[2].textContent=d.kpiEfficiency;
+  // Filter accordion header
+  _ts('.accordion-header[data-target="acc-filters"] span:first-child','filterSectionBtn',lang);
+  // Filter group labels (text node only)
+  const fgLbls=document.querySelectorAll('#acc-filters .filter-group label');
+  const fgKeys=['filterTimeLabel','filterDayLabel','filterMonthLabel','filterVehicleLabel','filterViolationLabel'];
+  fgLbls.forEach((lbl,i)=>{ if(!fgKeys[i]) return; for(const n of lbl.childNodes){ if(n.nodeType===Node.TEXT_NODE){ n.textContent=d[fgKeys[i]]; break; } } });
+  // Select first options
+  const mSel=document.getElementById('month-select'), vSel=document.getElementById('vehicle-select'), viSel=document.getElementById('violation-select');
+  if(mSel?.options[0])  mSel.options[0].text=d.filterAllMonths;
+  if(vSel?.options[0])  vSel.options[0].text=d.filterAllVehicles;
+  if(viSel?.options[0]) viSel.options[0].text=d.filterAllViolations;
+  // DOW buttons
+  const mDow=document.querySelectorAll('#acc-filters .dow-btn');
+  ['dowAll','dowMon','dowTue','dowWed','dowThu','dowFri','dowSat','dowSun'].forEach((k,i)=>{ if(mDow[i]&&d[k]) mDow[i].textContent=d[k]; });
+  _t('reset-filters','filterReset',lang);
+  // Simulation
+  _ts('.accordion-header[data-target="acc-sim"] span:first-child','simSectionBtn',lang);
+  const sl=document.querySelectorAll('.sim-speed-label');
+  if(sl[0]) sl[0].textContent=d.simSpeed; if(sl[1]) sl[1].textContent=d.simDay;
+  _t('sim-play','simPlay',lang); _t('sim-pause','simPause',lang); _t('sim-stop','simStop',lang);
+  _ts('.sim-hotspot-title','simLiveHotspot',lang);
+  const simDow=document.getElementById('sim-dow-select');
+  const dF=['dowMonFull','dowTueFull','dowWedFull','dowThuFull','dowFriFull','dowSatFull','dowSunFull'];
+  if(simDow) Array.from(simDow.options).forEach((o,i)=>{ if(d[dF[i]]) o.text=d[dF[i]]; });
+  // Legend
+  _tt('.legend-title','legendTitle',lang);
+  const legItems=document.querySelectorAll('.legend-item');
+  ['legendF','legendE','legendCD','legendAB'].forEach((k,i)=>{
+    if(!legItems[i]||!d[k]) return;
+    const dot=legItems[i].querySelector('.dot');
+    legItems[i].innerHTML=(dot?dot.outerHTML:'')+' '+d[k];
+  });
+  // Map layers
+  _ts('.layer-ctrl-title','mapLayers',lang);
+  const ltl=document.querySelectorAll('.layer-toggle-label');
+  if(ltl[0]) ltl[0].textContent=d.layerHeatmap;
+  if(ltl[1]) ltl[1].textContent=d.layerHotspots;
+  if(ltl[2]) ltl[2].textContent=d.layerShowAll;
+  _ts('.layer-ctrl-sub','layerCtrlSub',lang);
+  const msS=document.getElementById('ms-btn-standard'), msH=document.getElementById('ms-btn-hybrid');
+  if(msS) msS.textContent=d.mapStandard; if(msH) msH.textContent=d.mapHybrid;
+  const mst=document.querySelector('#mappls-layer-switcher .layer-ctrl-title');
+  if(mst) mst.textContent=d.mapStyle;
+  // Welcome banner
+  const bSpans=document.querySelectorAll('#map-welcome-banner > span');
+  if(bSpans[0]) bSpans[0].textContent=d.bannerClick;
+  if(bSpans[2]) bSpans[2].textContent=d.bannerPlay;
+  _t('banner-dismiss','bannerDismiss',lang);
+  // Junction panel stat labels
+  const stl=document.querySelectorAll('.stat-lbl');
+  ['jpStatTotal','jpStatPeak','jpStatDay','jpStatVehicle'].forEach((k,i)=>{ if(stl[i]&&d[k]) stl[i].textContent=d[k]; });
+  // JP section titles (first text node only)
+  const jst=document.querySelectorAll('.jp-section-title');
+  const jstK=[null,'jpRoadImpact','jpViolBreakdown','jpMonthlyTrend','jpEnfGap','jpDecayTitle','jpLWRTitle'];
+  jst.forEach((el,i)=>{
+    const k=jstK[i]; if(!k||!d[k]) return;
+    for(const n of el.childNodes){ if(n.nodeType===Node.TEXT_NODE&&n.textContent.trim()){ n.textContent=d[k]+' '; return; } }
+  });
+  _ts('.road-label','jpNormal',lang);
+  const il=document.querySelectorAll('.impact-lbl');
+  ['jpLOS','jpLanes','jpThroughput'].forEach((k,i)=>{ if(il[i]&&d[k]&&!il[i].querySelector('.cite')) il[i].textContent=d[k]; });
+  _ts('.capacity-bar-label','jpCapLost',lang);
+  _ts('.big-pct-label','jpNullLabel',lang);
+  const lwrL=document.querySelectorAll('.lwr-lbl');
+  ['jpQueueLbl','jpShockLbl','jpSpeedLbl'].forEach((k,i)=>{ if(lwrL[i]&&d[k]) lwrL[i].textContent=d[k]; });
+  // Predict tab
+  const pft=document.querySelectorAll('#predict-controls .filter-title');
+  if(pft[0]) pft[0].textContent=d.predTitle; if(pft[1]) pft[1].textContent=d.predTop5;
+  const pfl=document.querySelectorAll('#predict-controls .filter-group label');
+  if(pfl[0]){ for(const n of pfl[0].childNodes){ if(n.nodeType===Node.TEXT_NODE){ n.textContent=d.predHourLabel; break; } } }
+  if(pfl[1]) pfl[1].textContent=d.predDayLabel;
+  const pdow=document.querySelectorAll('.pred-dow');
+  ['dowMon','dowTue','dowWed','dowThu','dowFri','dowSat','dowSun'].forEach((k,i)=>{ if(pdow[i]&&d[k]) pdow[i].textContent=d[k]; });
+  _ts('.pred-detail-section-title','predDetailAction',lang);
+  // Patrol tab
+  _ts('#patrol-controls .filter-title','patrolTitle',lang);
+  _t('generate-routes','generateRoutes',lang);
+  _ts('.accordion-header[data-target="acc-patrol-adv"] span:first-child','patrolAdvSettings',lang);
+  const afl=document.querySelectorAll('#acc-patrol-adv .filter-group label');
+  if(afl[0]) afl[0].textContent=d.patrolShiftStart;
+  if(afl[1]) afl[1].textContent=d.patrolShiftDur;
+  if(afl[2]) afl[2].textContent=d.patrolStation;
+  const cb=document.querySelectorAll('.cov-thresh-btn');
+  if(cb[0]) cb[0].textContent=d.covTight; if(cb[1]) cb[1].textContent=d.covBalanced; if(cb[2]) cb[2].textContent=d.covWide;
+  const spl=document.querySelector('#patrol-unit-filter-group label');
+  if(spl) spl.textContent=d.patrolSpotlight;
+  _ts('.patrol-explain','patrolExplain',lang);
+  _ts('.patrol-algo-note','patrolAlgoNote',lang);
+  _ts('.coverage-title','covTitle',lang);
+  const cl=document.querySelectorAll('.cov-label');
+  if(cl[0]) cl[0].textContent=d.covFixed; if(cl[1]) cl[1].textContent=d.covOptimized;
+  const itT=document.querySelector('#itinerary-section .filter-title');
+  if(itT) itT.textContent=d.patrolItinerary;
+  const ths=document.querySelectorAll('#itinerary-table th');
+  ['itinUnit','itinJunction','itinArrive','itinDepart','itinRevisit','itinPredicted','itinLOS'].forEach((k,i)=>{ if(ths[i]&&d[k]) ths[i].textContent=d[k]; });
+  _ts('.dispatch-title','dispatchTitle',lang);
+  _t('dispatch-email-btn','dispatchSend',lang);
+  const di=document.getElementById('dispatch-email-input');
+  if(di&&d.dispatchPlaceholder) di.placeholder=d.dispatchPlaceholder;
+  // Interventions
+  _ts('#int-restructure-card .int-count-label','intRestructure',lang);
+  _ts('#int-restructure-card .int-count-sub','intRestructureSub',lang);
+  _ts('#int-enforce-card .int-count-label','intEnforce',lang);
+  _ts('#int-enforce-card .int-count-sub','intEnforceSub',lang);
+  _ts('#int-process-card .int-count-label','intProcess',lang);
+  _ts('#int-process-card .int-count-sub','intProcessSub',lang);
+  const ifb=document.querySelectorAll('.int-filter-btn');
+  ['intFilterAll','intFilterRestructure','intFilterEnforce','intFilterProcess'].forEach((k,i)=>{ if(ifb[i]&&d[k]) ifb[i].textContent=d[k]; });
+}
+
+function toggleLang() {
+  currentLang = currentLang === 'en' ? 'kn' : 'en';
+  applyTranslations(currentLang);
+}
+
+/* =========================================================
+   LWR SHOCKWAVE PHYSICS — Fetch & Display
+   ========================================================= */
+async function loadLWRPhysics(junctionName) {
+  try {
+    const res  = await fetch(`${BASE}/api/physics?name=${encodeURIComponent(junctionName)}`);
+    const data = await res.json();
+
+    if (data.error) return;
+
+    const titleEl = document.getElementById('lwr-section-title');
+    const cardEl  = document.getElementById('lwr-card');
+    const queueEl = document.getElementById('lwr-queue');
+    const shockEl = document.getElementById('lwr-shock');
+    const speedEl = document.getElementById('lwr-speed');
+
+    if (!titleEl) return;
+
+    // Only show for LOS D, E, F (meaningful bottlenecks)
+    const showPhysics = ['D', 'E', 'F'].includes(data.los_grade);
+    titleEl.style.display = showPhysics ? '' : 'none';
+    cardEl.style.display  = showPhysics ? '' : 'none';
+
+    if (showPhysics) {
+      queueEl.textContent = data.queue_length_km > 0 ? `${data.queue_length_km} km` : '< 0.1 km';
+      shockEl.textContent = `${Math.abs(data.shockwave_velocity_kmh).toFixed(1)}`;
+      speedEl.textContent = `${data.v_bottleneck_kmh} km/h`;
+
+      // Color the queue value red for severe cases
+      queueEl.style.color = data.queue_length_km >= 1 ? '#ef4444'
+                          : data.queue_length_km >= 0.5 ? '#f97316'
+                          : '#a78bfa';
+    }
+  } catch (e) {
+    // Physics endpoint unavailable — silently skip
+  }
+}
+
+/* =========================================================
+   EMAIL DISPATCH — Send patrol itinerary via backend SMTP
+   ========================================================= */
+let _lastPatrolResult = null;  // stores latest GA route result for dispatch
+
+// Intercept patrol result storage (called after renderPatrolResult)
+const _origRender = window.renderPatrolResult;
+function patchPatrolCapture(result) {
+  _lastPatrolResult = result;
+}
+
+// Hook into generate-routes button click to capture result
+document.addEventListener('DOMContentLoaded', () => {
+  const origBtn = document.getElementById('generate-routes');
+  if (origBtn) {
+    origBtn.addEventListener('click', async () => {
+      // Wait for the fetch to complete, then capture from DOM
+      setTimeout(() => {
+        const rows = document.querySelectorAll('#itinerary-body tr');
+        if (rows.length) {
+          // Email panel shown automatically when itinerary renders
+          document.getElementById('email-dispatch-panel').style.display = '';
+        }
+      }, 3500);
+    });
+  }
+});
+
+async function sendDispatchEmail() {
+  const emailInput  = document.getElementById('dispatch-email-input');
+  const statusEl    = document.getElementById('dispatch-status');
+  const btn         = document.getElementById('dispatch-email-btn');
+  const recipient   = (emailInput?.value || '').trim();
+
+  if (!recipient || !recipient.includes('@')) {
+    statusEl.className  = 'dispatch-status error';
+    statusEl.textContent = '✗ Please enter a valid email address.';
+    return;
+  }
+
+  // Extract itinerary from table DOM
+  const units   = {};
+  document.querySelectorAll('#itinerary-body tr').forEach(row => {
+    const cells = row.querySelectorAll('td');
+    if (cells.length < 7) return;
+    const unitId = cells[0].textContent.replace('Unit ', '').trim();
+    if (!units[unitId]) units[unitId] = { unit_id: unitId, route: [] };
+    units[unitId].route.push({
+      junction:             cells[1].textContent,
+      arrive:               cells[2].textContent,
+      depart:               cells[3].textContent,
+      revisit_at:           cells[4].textContent,
+      predicted_violations: parseFloat(cells[5].textContent) || 0,
+      los_grade:            cells[6].textContent.replace('LOS ', '').trim()
+    });
+  });
+
+  const station = document.getElementById('station-select')?.value || 'Bengaluru';
+
+  // Show sending state
+  btn.disabled            = true;
+  statusEl.className      = 'dispatch-status sending';
+  statusEl.textContent    = '⏳ Sending patrol route via email...';
+
+  try {
+    const res  = await fetch(`${BASE}/api/dispatch/email`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ recipient, units: Object.values(units), station })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      statusEl.className  = 'dispatch-status success';
+      statusEl.textContent = `✓ Route dispatched to ${recipient}`;
+      emailInput.value    = '';
+    } else {
+      statusEl.className  = 'dispatch-status error';
+      statusEl.textContent = `✗ Failed: ${data.error || 'Unknown error'}`;
+    }
+  } catch (e) {
+    statusEl.className  = 'dispatch-status error';
+    statusEl.textContent = '✗ Network error — check that the backend is running.';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* =========================================================
+   HOOK — Augment junction panel open to also load LWR data
+   ========================================================= */
+// Patch: whenever a junction panel opens, also load LWR physics
+const _origJpName = document.getElementById('jp-name');
+if (_origJpName) {
+  const jpObserver = new MutationObserver(() => {
+    const name = document.getElementById('jp-name')?.textContent;
+    if (name && name !== 'Junction Name') {
+      loadLWRPhysics(name);
+    }
+  });
+  jpObserver.observe(_origJpName, { childList: true, characterData: true, subtree: true });
 }

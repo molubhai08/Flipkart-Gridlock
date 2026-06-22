@@ -1,0 +1,17 @@
+{
+  "name": "EnforceIQ Officer",
+  "short_name": "EnforceIQ",
+  "description": "Bengaluru Traffic Police field patrol companion by EnforceIQ AI",
+  "start_url": "/officer",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%231e293b'/><text y='.9em' font-size='128' x='16'>🚔</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}

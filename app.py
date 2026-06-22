@@ -15,6 +15,7 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
+from fastapi import Body
 from pathlib import Path
 import pandas as pd
 import numpy as np
@@ -23,6 +24,29 @@ import math
 import pickle
 import functools
 import random
+import smtplib
+import os
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from typing import Optional
+
+# ── Load .env credentials ─────────────────────────────────────────────────────────────────────────────────────
+def _load_env():
+    env_path = Path(__file__).parent / ".env"
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip())
+_load_env()
+
+SMTP_HOST     = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT     = int(os.environ.get("SMTP_PORT", 587))
+SMTP_USER     = os.environ.get("SMTP_USERNAME", "")
+SMTP_PASS     = os.environ.get("SMTP_PASSWORD", "")
+DISPATCH_FROM = os.environ.get("DISPATCH_FROM", SMTP_USER)
+MAPPLS_KEY    = os.environ.get("MAPPLS_API_KEY", "")
 
 app = FastAPI(title="EnforceIQ AI")
 
@@ -140,6 +164,14 @@ def haversine(lat1, lon1, lat2, lon2):
 def index():
     return (BASE_DIR / "templates" / "index.html").read_text(encoding="utf-8")
 
+
+@app.get("/api/config")
+def get_config():
+    """Exposes safe runtime config to the frontend — Mappls key, feature flags."""
+    return {
+        "mappls_key":     MAPPLS_KEY,
+        "mappls_enabled": bool(MAPPLS_KEY),
+    }
 
 @app.get("/api/kpis")
 def get_kpis():
@@ -520,3 +552,163 @@ def get_interventions():
         })
     result.sort(key=lambda x: x["total_violations"], reverse=True)
     return {"summary_counts": counts, "junctions": result}
+
+
+# ── LWR Physics: Greenshields + Shockwave queue length ─────────────────────────────────────────────────────────────────────────────────────
+@app.get("/api/physics")
+def get_physics(name: str):
+    """
+    Calculates Lighthill-Whitham-Richards (LWR) shockwave physics for a junction.
+    Returns capacity_loss_pct, shockwave_velocity_kmh, and queue_length_km.
+    """
+    data = JUNCTIONS.get(name)
+    if not data:
+        return {"error": "not found"}
+
+    # Parameters for Bengaluru urban arterials
+    free_flow_speed = 50.0   # km/h typical free-flow
+    jam_density     = 120.0  # vehicles/km/lane (jam)
+    base_lanes      = 3.0    # assumed 3-lane carriageway
+
+    # Use existing effective_lanes from Karachi LOS (already computed)
+    effective_lanes = data.get("effective_lanes", base_lanes)
+    cap_loss_pct    = data.get("capacity_lost_pct", 0.0)
+
+    # Greenshields: speed at bottleneck
+    # v = v_f * (1 - k/k_j)  →  rearranged for capacity ratio
+    capacity_ratio  = effective_lanes / base_lanes
+    k_bottleneck    = jam_density * (1.0 - capacity_ratio * 0.5)
+    v_bottleneck    = free_flow_speed * (1.0 - k_bottleneck / jam_density)
+    q_bottleneck    = k_bottleneck * v_bottleneck
+
+    k_normal = 30.0  # typical upstream density
+    v_normal = free_flow_speed * (1.0 - k_normal / jam_density)
+    q_normal = k_normal * v_normal
+
+    # LWR shockwave velocity (negative = propagates upstream)
+    denom = k_bottleneck - k_normal
+    omega = (q_bottleneck - q_normal) / denom if denom != 0 else 0.0
+
+    # Queue length after 1 hour of peak bottleneck
+    queue_km = max(0.0, round(-omega * 1.0, 2))
+
+    return {
+        "name":                  name,
+        "effective_lanes":       round(effective_lanes, 2),
+        "capacity_lost_pct":     round(cap_loss_pct, 1),
+        "shockwave_velocity_kmh": round(omega, 2),
+        "queue_length_km":       queue_km,
+        "v_bottleneck_kmh":      round(max(0, v_bottleneck), 1),
+        "los_grade":             data.get("los_grade", "?"),
+        "model": "Greenshields + LWR (Lighthill-Whitham-Richards 1955)"
+    }
+
+
+# ── Email Dispatch Endpoint ──────────────────────────────────────────────────────────────────────────────────────────────
+@app.post("/api/dispatch/email")
+async def dispatch_email(body: dict = Body(...)):
+    """
+    Sends a patrol route itinerary via Gmail SMTP to a provided email address.
+    Expects: { "recipient": "officer@btp.gov.in", "units": [...], "station": "..." }
+    """
+    recipient = body.get("recipient", "").strip()
+    units     = body.get("units", [])
+    station   = body.get("station", "Bengaluru Traffic Police")
+    subject   = f"EnforceIQ Patrol Dispatch — {station}"
+
+    if not recipient:
+        return {"success": False, "error": "No recipient email provided."}
+    if not SMTP_USER or not SMTP_PASS:
+        return {"success": False, "error": "SMTP credentials not configured in .env"}
+
+    # Build HTML email body
+    rows_html = ""
+    for unit in units:
+        uid = unit.get("unit_id", "?")
+        for stop in unit.get("route", []):
+            los = stop.get("los_grade", "?")
+            los_color = {"F": "#ef4444", "E": "#f97316", "D": "#eab308",
+                         "C": "#22c55e", "B": "#06b6d4", "A": "#06b6d4"}.get(los, "#94a3b8")
+            rows_html += f"""
+            <tr>
+              <td style='padding:6px 10px;border-bottom:1px solid #1e293b;color:#94a3b8;'>Unit {uid}</td>
+              <td style='padding:6px 10px;border-bottom:1px solid #1e293b;color:#f1f5f9;font-weight:600;'>{stop.get('junction','\u2014')}</td>
+              <td style='padding:6px 10px;border-bottom:1px solid #1e293b;color:#22c55e;'>{stop.get('arrive','\u2014')}</td>
+              <td style='padding:6px 10px;border-bottom:1px solid #1e293b;color:#ef4444;'>{stop.get('depart','\u2014')}</td>
+              <td style='padding:6px 10px;border-bottom:1px solid #1e293b;color:#64748b;'>{stop.get('revisit_at','\u2014')}</td>
+              <td style='padding:6px 10px;border-bottom:1px solid #1e293b;color:{los_color};font-weight:700;'>LOS {los}</td>
+            </tr>"""
+
+    html_body = f"""
+    <html><body style='margin:0;padding:0;background:#0f172a;font-family:Inter,system-ui,sans-serif;color:#e2e8f0;'>
+      <div style='max-width:680px;margin:24px auto;background:#1e293b;border-radius:12px;overflow:hidden;border:1px solid #334155;'>
+        <div style='background:linear-gradient(135deg,#1e3a5f,#1e293b);padding:28px 32px;border-bottom:1px solid #334155;'>
+          <div style='font-size:11px;letter-spacing:2px;color:#3b82f6;font-weight:700;text-transform:uppercase;margin-bottom:8px;'>Bengaluru Traffic Police \u00b7 EnforceIQ AI</div>
+          <h1 style='margin:0;font-size:22px;font-weight:800;color:#f1f5f9;letter-spacing:-0.5px;'>\U0001f694 Patrol Dispatch Order</h1>
+          <div style='font-size:13px;color:#64748b;margin-top:6px;'>Station: <strong style='color:#94a3b8;'>{station}</strong></div>
+        </div>
+        <div style='padding:24px 32px;'>
+          <table style='width:100%;border-collapse:collapse;'>
+            <thead>
+              <tr style='background:#0f172a;'>
+                <th style='padding:8px 10px;text-align:left;font-size:9px;letter-spacing:1px;color:#3b82f6;text-transform:uppercase;'>Unit</th>
+                <th style='padding:8px 10px;text-align:left;font-size:9px;letter-spacing:1px;color:#3b82f6;text-transform:uppercase;'>Junction</th>
+                <th style='padding:8px 10px;text-align:left;font-size:9px;letter-spacing:1px;color:#3b82f6;text-transform:uppercase;'>Arrive</th>
+                <th style='padding:8px 10px;text-align:left;font-size:9px;letter-spacing:1px;color:#3b82f6;text-transform:uppercase;'>Depart</th>
+                <th style='padding:8px 10px;text-align:left;font-size:9px;letter-spacing:1px;color:#3b82f6;text-transform:uppercase;'>Revisit</th>
+                <th style='padding:8px 10px;text-align:left;font-size:9px;letter-spacing:1px;color:#3b82f6;text-transform:uppercase;'>LOS</th>
+              </tr>
+            </thead>
+            <tbody>{rows_html}</tbody>
+          </table>
+        </div>
+        <div style='padding:16px 32px;background:#0f172a;border-top:1px solid #334155;font-size:10px;color:#475569;'>
+          Generated by EnforceIQ AI \u00b7 Genetic Algorithm Route Optimization \u00b7 Bengaluru Traffic Police
+        </div>
+      </div>
+    </body></html>"""
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"]    = DISPATCH_FROM
+        msg["To"]      = recipient
+        msg.attach(MIMEText(html_body, "html"))
+
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASS)
+            server.sendmail(SMTP_USER, recipient, msg.as_string())
+
+        return {"success": True, "message": f"Patrol itinerary dispatched to {recipient}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# ── Feedback log endpoint (field outcomes for retraining) ──────────────────────────────────────────────────────────────────────
+@app.post("/api/feedback/log")
+async def log_feedback(body: dict = Body(...)):
+    """
+    Accepts field outcome logs from the PWA officer app.
+    Stores them in event_feedback_log.json for periodic retraining.
+    """
+    log_path = BASE_DIR / "data" / "field_feedback_log.json"
+    logs = []
+    if log_path.exists():
+        try:
+            logs = json.loads(log_path.read_text())
+        except Exception:
+            logs = []
+    body["server_received"] = str(pd.Timestamp.now())
+    logs.append(body)
+    log_path.write_text(json.dumps(logs, indent=2))
+    return {"success": True, "total_logs": len(logs)}
+
+
+# ── Officer PWA page ──────────────────────────────────────────────────────────────────────────────────────────────────────
+@app.get("/officer", response_class=HTMLResponse)
+def officer_app():
+    page = BASE_DIR / "templates" / "officer.html"
+    if page.exists():
+        return page.read_text(encoding="utf-8")
+    return HTMLResponse("<h1>Officer app not found.</h1>", status_code=404)

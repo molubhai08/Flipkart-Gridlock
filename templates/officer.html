@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>EnforceIQ — Officer Field App</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --blue: #3b82f6;
+      --green: #22c55e;
+      --red: #ef4444;
+      --orange: #f97316;
+      --yellow: #eab308;
+      --muted: #64748b;
+      --text: #f1f5f9;
+      --subtext: #94a3b8;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, #1e3a5f, #1e293b);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 16px 10px;
+      flex-shrink: 0;
+    }
+    .header-eyebrow {
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: var(--blue);
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .header-title {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .header-badge {
+      font-size: 9px;
+      background: rgba(34,197,94,0.15);
+      border: 1px solid rgba(34,197,94,0.4);
+      color: var(--green);
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .header-sub {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* ── Load route section ── */
+    .load-section {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--card);
+    }
+    .load-label {
+      font-size: 10px;
+      letter-spacing: 1.2px;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .load-input-row {
+      display: flex;
+      gap: 8px;
+    }
+    .load-input-row input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-family: inherit;
+    }
+    .load-input-row input:focus { outline: none; border-color: var(--blue); }
+    .btn-primary {
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-primary:disabled { background: var(--muted); cursor: not-allowed; }
+
+    /* ── Summary bar ── */
+    #summary-bar {
+      display: none;
+      padding: 12px 16px;
+      background: rgba(59,130,246,0.08);
+      border-bottom: 1px solid rgba(59,130,246,0.2);
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    #summary-bar.visible { display: flex; }
+    .sum-item { display: flex; flex-direction: column; }
+    .sum-val { font-size: 18px; font-weight: 800; color: var(--text); }
+    .sum-lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+
+    /* ── Stops list ── */
+    #stops-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+    }
+    .stops-header {
+      font-size: 10px;
+      letter-spacing: 1.2px;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .stop-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 10px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .stop-card.done { border-color: var(--green); opacity: 0.65; }
+    .stop-card.clear { border-color: var(--muted); opacity: 0.55; }
+
+    .stop-top {
+      display: flex;
+      align-items: center;
+      padding: 12px 14px;
+      gap: 12px;
+    }
+    .stop-number {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 800;
+      flex-shrink: 0;
+    }
+    .stop-info { flex: 1; min-width: 0; }
+    .stop-name {
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text);
+    }
+    .stop-meta {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .los-badge {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+
+    .stop-times {
+      display: flex;
+      padding: 0 14px 10px;
+      gap: 16px;
+    }
+    .time-block { display: flex; flex-direction: column; }
+    .time-val { font-size: 14px; font-weight: 700; }
+    .time-lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .stop-actions {
+      display: flex;
+      border-top: 1px solid var(--border);
+    }
+    .action-btn {
+      flex: 1;
+      padding: 10px 8px;
+      border: none;
+      background: none;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      letter-spacing: 0.3px;
+    }
+    .action-btn:hover { background: rgba(255,255,255,0.04); }
+    .action-btn.tow { color: var(--orange); border-right: 1px solid var(--border); }
+    .action-btn.tow:hover { background: rgba(249,115,22,0.1); }
+    .action-btn.ticket { color: var(--yellow); border-right: 1px solid var(--border); }
+    .action-btn.ticket:hover { background: rgba(234,179,8,0.1); }
+    .action-btn.clear { color: var(--green); }
+    .action-btn.clear:hover { background: rgba(34,197,94,0.1); }
+
+    /* ── Empty / loading state ── */
+    #empty-state {
+      text-align: center;
+      padding: 60px 24px;
+      color: var(--muted);
+    }
+    .empty-icon { font-size: 48px; margin-bottom: 16px; }
+    .empty-title { font-size: 16px; font-weight: 700; color: var(--subtext); margin-bottom: 8px; }
+    .empty-sub { font-size: 12px; line-height: 1.6; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #1e293b;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      transition: transform 0.3s ease;
+      z-index: 9999;
+      white-space: nowrap;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+    #toast.success { border-color: var(--green); color: var(--green); }
+    #toast.warning { border-color: var(--orange); color: var(--orange); }
+
+    /* ── Footer sync bar ── */
+    footer {
+      padding: 10px 16px;
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    #sync-status {
+      font-size: 10px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sync-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s infinite;
+    }
+    .sync-dot.offline { background: var(--orange); animation: none; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .btn-sync {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--subtext);
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-sync:hover { border-color: var(--blue); color: var(--blue); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-eyebrow">Bengaluru Traffic Police · EnforceIQ AI</div>
+    <div class="header-title">
+      🚔 Field Officer App
+      <span class="header-badge" id="online-badge">ONLINE</span>
+    </div>
+    <div class="header-sub" id="shift-label">No active shift loaded</div>
+  </header>
+
+  <div class="load-section">
+    <div class="load-label">Load Dispatch Route</div>
+    <div class="load-input-row">
+      <input type="text" id="route-code-input" placeholder="Enter dispatch code (e.g. BTP_ROUTE:unit=2) or paste URL">
+      <button class="btn-primary" id="load-route-btn" onclick="loadRoute()">Load</button>
+    </div>
+  </div>
+
+  <div id="summary-bar">
+    <div class="sum-item">
+      <span class="sum-val" id="sum-stops">0</span>
+      <span class="sum-lbl">Stops</span>
+    </div>
+    <div class="sum-item">
+      <span class="sum-val" id="sum-done">0</span>
+      <span class="sum-lbl">Completed</span>
+    </div>
+    <div class="sum-item">
+      <span class="sum-val" id="sum-violations">0</span>
+      <span class="sum-lbl">Actions</span>
+    </div>
+    <div class="sum-item">
+      <span class="sum-val" id="sum-unit">—</span>
+      <span class="sum-lbl">Unit</span>
+    </div>
+  </div>
+
+  <div id="stops-container">
+    <div id="empty-state">
+      <div class="empty-icon">📋</div>
+      <div class="empty-title">No Route Loaded</div>
+      <div class="empty-sub">Enter a dispatch code from the command center above, or ask your supervisor to send one via email.</div>
+    </div>
+    <div class="stops-header" id="stops-header" style="display:none">TODAY'S PATROL STOPS</div>
+    <div id="stops-list"></div>
+  </div>
+
+  <footer>
+    <div id="sync-status">
+      <span class="sync-dot" id="sync-dot"></span>
+      <span id="sync-label">Ready</span>
+    </div>
+    <button class="btn-sync" id="sync-btn" onclick="syncLogs()">⬆ Sync Logs</button>
+  </footer>
+
+  <div id="toast"></div>
+
+  <script>
+    const LOS_COLOR = { F: '#ef4444', E: '#f97316', D: '#eab308', C: '#22c55e', B: '#06b6d4', A: '#06b6d4' };
+    const LOS_BG    = { F: 'rgba(239,68,68,0.15)', E: 'rgba(249,115,22,0.15)', D: 'rgba(234,179,8,0.15)',
+                        C: 'rgba(34,197,94,0.15)', B: 'rgba(6,182,212,0.15)', A: 'rgba(6,182,212,0.15)' };
+
+    let activeRoute  = [];
+    let fieldLogs    = JSON.parse(localStorage.getItem('enforceiq_logs') || '[]');
+    let isOnline     = navigator.onLine;
+    let actionCount  = 0;
+
+    // ── Online / offline detection ──
+    window.addEventListener('online',  () => { isOnline = true;  updateSyncStatus(); });
+    window.addEventListener('offline', () => { isOnline = false; updateSyncStatus(); });
+
+    function updateSyncStatus() {
+      const dot   = document.getElementById('sync-dot');
+      const label = document.getElementById('sync-label');
+      const badge = document.getElementById('online-badge');
+      if (isOnline) {
+        dot.className = 'sync-dot';
+        label.textContent = 'Connected';
+        badge.textContent = 'ONLINE';
+        badge.style.color = '#22c55e';
+        badge.style.borderColor = 'rgba(34,197,94,0.4)';
+        badge.style.background = 'rgba(34,197,94,0.15)';
+      } else {
+        dot.className = 'sync-dot offline';
+        label.textContent = 'Offline — logs saved locally';
+        badge.textContent = 'OFFLINE';
+        badge.style.color = '#f97316';
+        badge.style.borderColor = 'rgba(249,115,22,0.4)';
+        badge.style.background = 'rgba(249,115,22,0.15)';
+      }
+    }
+    updateSyncStatus();
+
+    // ── Load route from dispatch code ──
+    function loadRoute() {
+      const code = document.getElementById('route-code-input').value.trim();
+      if (!code) { showToast('Please enter a dispatch code', 'warning'); return; }
+
+      // Try to parse unit stops from URL query or code string
+      let unit = '?', stops = [];
+
+      if (code.startsWith('BTP_ROUTE:')) {
+        // Inline demo data format: BTP_ROUTE:unit=2&stops=junc1|arr|dep|los,...
+        const payload = code.replace('BTP_ROUTE:', '');
+        const params  = new URLSearchParams(payload);
+        unit          = params.get('unit') || '?';
+        const rawStops = params.get('stops') || '';
+        stops = rawStops.split(',').filter(Boolean).map((s, i) => {
+          const parts = s.split('|');
+          return { junction: parts[0] || `Stop ${i+1}`, arrive: parts[1] || '--:--', depart: parts[2] || '--:--', revisit_at: parts[3] || '—', los_grade: parts[4] || 'C', predicted_violations: parseFloat(parts[5]) || 0 };
+        });
+      } else {
+        // Try fetching from server if URL-like
+        showToast('Invalid dispatch code format', 'warning');
+        return;
+      }
+
+      activeRoute = stops;
+      actionCount = 0;
+      renderRoute(unit, stops);
+      showToast(`Route loaded: ${stops.length} stops`, 'success');
+    }
+
+    function renderRoute(unit, stops) {
+      document.getElementById('empty-state').style.display  = 'none';
+      document.getElementById('stops-header').style.display = '';
+      document.getElementById('summary-bar').classList.add('visible');
+      document.getElementById('sum-stops').textContent = stops.length;
+      document.getElementById('sum-unit').textContent  = `Unit ${unit}`;
+      document.getElementById('sum-done').textContent  = '0';
+      document.getElementById('sum-violations').textContent = '0';
+      document.getElementById('shift-label').textContent = `Unit ${unit} · ${stops.length} stops`;
+
+      const list = document.getElementById('stops-list');
+      list.innerHTML = '';
+
+      stops.forEach((stop, idx) => {
+        const los   = stop.los_grade || 'C';
+        const color = LOS_COLOR[los] || '#94a3b8';
+        const bg    = LOS_BG[los]    || 'rgba(148,163,184,0.15)';
+        const numBg = los === 'F' ? '#ef4444' : los === 'E' ? '#f97316' : '#3b82f6';
+
+        const card = document.createElement('div');
+        card.className = 'stop-card';
+        card.id = `stop-${idx}`;
+        card.innerHTML = `
+          <div class="stop-top">
+            <div class="stop-number" style="background:${numBg};color:#fff;">${idx + 1}</div>
+            <div class="stop-info">
+              <div class="stop-name">${stop.junction}</div>
+              <div class="stop-meta">Predicted: ${stop.predicted_violations} violations · Revisit: ${stop.revisit_at}</div>
+            </div>
+            <span class="los-badge" style="background:${bg};color:${color};border:1px solid ${color};">LOS ${los}</span>
+          </div>
+          <div class="stop-times">
+            <div class="time-block">
+              <span class="time-val" style="color:#22c55e;">${stop.arrive}</span>
+              <span class="time-lbl">Arrive</span>
+            </div>
+            <div class="time-block">
+              <span class="time-val" style="color:#ef4444;">${stop.depart}</span>
+              <span class="time-lbl">Depart</span>
+            </div>
+          </div>
+          <div class="stop-actions">
+            <button class="action-btn tow" onclick="logAction(${idx},'TOWED')">🚗 Towed</button>
+            <button class="action-btn ticket" onclick="logAction(${idx},'TICKETED')">📋 Ticketed</button>
+            <button class="action-btn clear" onclick="logAction(${idx},'CLEAR')">✅ Clear</button>
+          </div>`;
+        list.appendChild(card);
+      });
+    }
+
+    function logAction(idx, status) {
+      const stop = activeRoute[idx];
+      if (!stop) return;
+
+      const log = {
+        junction:  stop.junction,
+        status:    status,
+        timestamp: new Date().toISOString(),
+        unit:      document.getElementById('sum-unit').textContent,
+        los_grade: stop.los_grade
+      };
+
+      fieldLogs.push(log);
+      localStorage.setItem('enforceiq_logs', JSON.stringify(fieldLogs));
+      actionCount++;
+
+      // Update card style
+      const card = document.getElementById(`stop-${idx}`);
+      if (card) {
+        card.classList.add(status === 'CLEAR' ? 'clear' : 'done');
+        card.querySelector('.stop-actions').innerHTML =
+          `<div style="padding:8px 14px;font-size:11px;color:${status==='CLEAR'?'#22c55e':'#f97316'};font-weight:700;">
+            ${status === 'TOWED' ? '🚗 Vehicle Towed' : status === 'TICKETED' ? '📋 Ticket Issued' : '✅ Area Clear'}
+            · Logged ${new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}
+          </div>`;
+      }
+
+      // Update summary
+      const doneStopped = document.querySelectorAll('.stop-card.done, .stop-card.clear').length;
+      document.getElementById('sum-done').textContent       = doneStopped;
+      document.getElementById('sum-violations').textContent = actionCount;
+
+      showToast(`${status === 'CLEAR' ? '✅ Area clear' : status === 'TOWED' ? '🚗 Tow logged' : '📋 Ticket logged'} — ${stop.junction}`, 'success');
+
+      // Attempt server sync if online
+      if (isOnline) syncLogs();
+    }
+
+    async function syncLogs() {
+      const unsynced = JSON.parse(localStorage.getItem('enforceiq_logs') || '[]');
+      if (!unsynced.length) { showToast('No logs to sync', 'warning'); return; }
+
+      try {
+        const res = await fetch('/api/feedback/log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ logs: unsynced, synced_at: new Date().toISOString() })
+        });
+        if (res.ok) {
+          localStorage.setItem('enforceiq_logs', '[]');
+          document.getElementById('sync-label').textContent = `Synced ${unsynced.length} logs ✓`;
+          showToast(`${unsynced.length} field logs synced to server`, 'success');
+        }
+      } catch (e) {
+        showToast('Sync failed — logs saved offline', 'warning');
+      }
+    }
+
+    function showToast(msg, type = '') {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = `show ${type}`;
+      clearTimeout(el._timer);
+      el._timer = setTimeout(() => { el.classList.remove('show'); }, 3000);
+    }
+
+    // ── Service worker registration ──
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/static/js/sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>
