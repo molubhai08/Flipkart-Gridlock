@@ -697,101 +697,153 @@ let patrolDataGlobal = null; // Store route data globally to filter without re-f
 let patrolMarkers = [];      // Track live tracking markers (cars) on the map
 
 async function generateRoutes() {
-  const body = {
-    num_units:            state.patrolUnits,
-    shift_start_hour:     state.shiftStart,
-    shift_duration_hours: state.shiftDuration,
-    starting_station:     state.patrolStation,
-    coverage_threshold:   state.coverageThreshold,
-  };
+  const btn = document.getElementById('generate-routes');
+  const originalText = btn.textContent;
 
-  const data = await fetch(`${BASE}/api/patrol/optimize`, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify(body),
-  }).then(r => r.json());
-
-  patrolDataGlobal = data;
-
-  // Show and populate patrol unit spotlight chips
-  const filterGroup = document.getElementById('patrol-unit-filter-group');
-  const unitChips = document.getElementById('patrol-unit-chips');
-  const unitSelect = document.getElementById('patrol-unit-select');
-
-  if (filterGroup && unitChips && unitSelect) {
-    filterGroup.style.display = 'block';
-    unitChips.innerHTML = '';
-    unitSelect.innerHTML = '<option value="all">Show All Units</option>';
-
-    // Add "All" chip
-    const allChip = document.createElement('div');
-    allChip.className = 'unit-chip active';
-    allChip.style.borderColor = '#cbd5e1';
-    allChip.style.color = '#cbd5e1';
-    allChip.textContent = 'All Units';
-    allChip.dataset.unit = 'all';
-    unitChips.appendChild(allChip);
-
-    data.units.forEach(u => {
-      // populate hidden select
-      const opt = document.createElement('option');
-      opt.value = u.unit_id;
-      opt.textContent = `Unit ${u.unit_id}`;
-      unitSelect.appendChild(opt);
-
-      // create chip
-      const chip = document.createElement('div');
-      chip.className = 'unit-chip';
-      const color = UNIT_COLORS[(u.unit_id - 1) % UNIT_COLORS.length];
-      chip.style.borderColor = color;
-      chip.style.color = color;
-      chip.textContent = `U${u.unit_id}`;
-      chip.dataset.unit = u.unit_id;
-      unitChips.appendChild(chip);
-    });
-
-    // Chip click handler
-    unitChips.querySelectorAll('.unit-chip').forEach(chip => {
-      chip.addEventListener('click', () => {
-        unitChips.querySelectorAll('.unit-chip').forEach(c => c.classList.remove('active'));
-        chip.classList.add('active');
-        unitSelect.value = chip.dataset.unit;
-        drawPatrolRoutes();
-      });
-    });
+  // Ensure patrol map and junction data are ready
+  initPatrolMap();
+  if (!junctionData || junctionData.length === 0) {
+    await loadJunctions();
   }
 
-  // coverage bars
-  document.getElementById('coverage-section').classList.remove('hidden');
-  document.getElementById('itinerary-section').classList.remove('hidden');
+  // Show loading state
+  btn.disabled = true;
+  btn.textContent = '⏳ Generating...';
 
-  const baseBar  = document.getElementById('cov-baseline-bar');
-  const optBar   = document.getElementById('cov-optimized-bar');
-  const basePct  = document.getElementById('cov-baseline-pct');
-  const optPct   = document.getElementById('cov-optimized-pct');
+  try {
+    const body = {
+      num_units:            state.patrolUnits,
+      shift_start_hour:     state.shiftStart,
+      shift_duration_hours: state.shiftDuration,
+      starting_station:     state.patrolStation,
+      coverage_threshold:   state.coverageThreshold,
+    };
 
-  baseBar.style.width  = '0%';
-  optBar.style.width   = '0%';
+    const res = await fetch(`${BASE}/api/patrol/optimize`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    });
 
-  requestAnimationFrame(() => {
+    if (!res.ok) {
+      throw new Error(`Server error: ${res.status} ${res.statusText}`);
+    }
+
+    const data = await res.json();
+
+    if (!data || !data.units || data.units.length === 0) {
+      btn.textContent = '⚠️ No routes found';
+      btn.style.background = '#f59e0b';
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = originalText;
+        btn.style.background = '';
+      }, 3000);
+      return;
+    }
+
+    patrolDataGlobal = data;
+
+    // Show and populate patrol unit spotlight chips
+    const filterGroup = document.getElementById('patrol-unit-filter-group');
+    const unitChips = document.getElementById('patrol-unit-chips');
+    const unitSelect = document.getElementById('patrol-unit-select');
+
+    if (filterGroup && unitChips && unitSelect) {
+      filterGroup.style.display = 'block';
+      unitChips.innerHTML = '';
+      unitSelect.innerHTML = '<option value="all">Show All Units</option>';
+
+      // Add "All" chip
+      const allChip = document.createElement('div');
+      allChip.className = 'unit-chip active';
+      allChip.style.borderColor = '#cbd5e1';
+      allChip.style.color = '#cbd5e1';
+      allChip.textContent = 'All Units';
+      allChip.dataset.unit = 'all';
+      unitChips.appendChild(allChip);
+
+      data.units.forEach(u => {
+        // populate hidden select
+        const opt = document.createElement('option');
+        opt.value = u.unit_id;
+        opt.textContent = `Unit ${u.unit_id}`;
+        unitSelect.appendChild(opt);
+
+        // create chip
+        const chip = document.createElement('div');
+        chip.className = 'unit-chip';
+        const color = UNIT_COLORS[(u.unit_id - 1) % UNIT_COLORS.length];
+        chip.style.borderColor = color;
+        chip.style.color = color;
+        chip.textContent = `U${u.unit_id}`;
+        chip.dataset.unit = u.unit_id;
+        unitChips.appendChild(chip);
+      });
+
+      // Chip click handler
+      unitChips.querySelectorAll('.unit-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          unitChips.querySelectorAll('.unit-chip').forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          unitSelect.value = chip.dataset.unit;
+          drawPatrolRoutes();
+        });
+      });
+    }
+
+    // coverage bars
+    document.getElementById('coverage-section').classList.remove('hidden');
+    document.getElementById('itinerary-section').classList.remove('hidden');
+
+    const baseBar  = document.getElementById('cov-baseline-bar');
+    const optBar   = document.getElementById('cov-optimized-bar');
+    const basePct  = document.getElementById('cov-baseline-pct');
+    const optPct   = document.getElementById('cov-optimized-pct');
+
+    baseBar.style.width  = '0%';
+    optBar.style.width   = '0%';
+
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        baseBar.style.width  = data.baseline_fixed_shift_pct + '%';
+        basePct.textContent  = data.baseline_fixed_shift_pct + '%';
+        optBar.style.width   = data.total_coverage_pct + '%';
+        optPct.textContent   = data.total_coverage_pct + '%';
+      }, 50);
+    });
+
+    const delta = (data.total_coverage_pct - data.baseline_fixed_shift_pct).toFixed(1);
+    document.getElementById('coverage-tagline').innerHTML =
+      `Same officers. Same shift. <strong>+${delta}pp</strong> more violations addressed.<br>
+       <span style="font-size:9px;color:#64748b">
+         ${data.n_hotspots} hotspots selected · GA-optimized routes
+         · <em>Kim et al., Heliyon 2023</em>
+       </span>`;
+
+    // Success state
+    btn.textContent = '✅ Routes Generated!';
+    btn.style.background = '#22c55e';
     setTimeout(() => {
-      baseBar.style.width  = data.baseline_fixed_shift_pct + '%';
-      basePct.textContent  = data.baseline_fixed_shift_pct + '%';
-      optBar.style.width   = data.total_coverage_pct + '%';
-      optPct.textContent   = data.total_coverage_pct + '%';
-    }, 50);
-  });
+      btn.disabled = false;
+      btn.textContent = originalText;
+      btn.style.background = '';
+    }, 2000);
 
-  const delta = (data.total_coverage_pct - data.baseline_fixed_shift_pct).toFixed(1);
-  document.getElementById('coverage-tagline').innerHTML =
-    `Same officers. Same shift. <strong>+${delta}pp</strong> more violations addressed.<br>
-     <span style="font-size:9px;color:#64748b">
-       ${data.n_hotspots} hotspots selected · GA-optimized routes
-       · <em>Kim et al., Heliyon 2023</em>
-     </span>`;
+    drawPatrolRoutes();
 
-  drawPatrolRoutes();
+  } catch (err) {
+    console.error('Patrol generation failed:', err);
+    btn.textContent = '❌ Failed — Retry';
+    btn.style.background = '#ef4444';
+    btn.disabled = false;
+    setTimeout(() => {
+      btn.textContent = originalText;
+      btn.style.background = '';
+    }, 4000);
+  }
 }
+
 
 function drawPatrolRoutes() {
   if (!patrolDataGlobal) return;
@@ -1111,7 +1163,13 @@ function setupNavTabs() {
           }
         }
         if (tab === 'predict')       { initPredictMap(); loadPredictions(); }
-        if (tab === 'patrol')        initPatrolMap();
+        if (tab === 'patrol')        {
+          initPatrolMap();
+          // Also ensure junctionData is loaded (needed for route drawing)
+          if (!junctionData || junctionData.length === 0) {
+            await loadJunctions();
+          }
+        }
         if (tab === 'interventions') loadInterventions();
       }, 50);
     });
@@ -1726,7 +1784,12 @@ function switchToTab(tabName) {
       window.mainMap.invalidateSize(true);
     }
     if (tabName === 'predict')       { initPredictMap(); }
-    if (tabName === 'patrol')        initPatrolMap();
+    if (tabName === 'patrol')        {
+      initPatrolMap();
+      if (!junctionData || junctionData.length === 0) {
+        loadJunctions();
+      }
+    }
     if (tabName === 'interventions') {}
   }, 250);
 }
