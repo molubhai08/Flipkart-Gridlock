@@ -75,36 +75,23 @@ On-street illegal parking and spillover near commercial corridors, metro station
 EnforceIQ connects spatial clustering, transport engineering, supervised forecasting, and metaheuristic optimization in a unified operational dashboard.
 
 ```mermaid
-graph TD
-    %% Styling configurations
-    classDef data fill:#3b82f6,stroke:#1e40af,stroke-width:2px,color:#fff,rx:10px,ry:10px;
-    classDef ai fill:#10b981,stroke:#047857,stroke-width:2px,color:#fff,rx:10px,ry:10px;
-    classDef action fill:#f59e0b,stroke:#b45309,stroke-width:2px,color:#fff,rx:10px,ry:10px;
-    classDef feedback fill:#ef4444,stroke:#b91c1c,stroke-width:2px,color:#fff,rx:10px,ry:10px;
+flowchart TD
+    classDef step fill:#1f2937,stroke:#3b82f6,stroke-width:2px,color:#fff,rx:8px,ry:8px;
+    classDef dash fill:#f59e0b,stroke:#b45309,stroke-width:2px,color:#fff,rx:8px,ry:8px;
 
-    %% Nodes
-    A[Data Ingestion: Gather Traffic & Parking Data]:::data
-    B[AI Hotspot Detection: Group Violations into Clusters]:::ai
-    C[Impact Analysis: Calculate Traffic & CO2 Impact]:::ai
-    D[Risk Forecasting: Predict Future High-Risk Zones]:::ai
-    E[Smart Dispatch: Generate Optimal Patrol Routes]:::action
-    F[Live Dashboard: Command Center Visualization]:::action
-    G[Field Execution: Officers Clear Bottlenecks & Log Actions]:::feedback
-    H[Continuous Feedback Loop: Data Refines AI]:::feedback
-
-    %% Connections
-    A -->|Feeds Data| B
-    B -->|Identifies Hotspots| C
-    B -->|Trains Models| D
-    C -->|Provides Severity| E
-    D -->|Provides Forecasts| E
-    C -->|Shows Real-time Stats| F
-    D -->|Shows Predictions| F
-    E -->|Sends Routes & Tasks| G
-    E -->|Updates Squad Status| F
-    G -->|Updates Dashboard Feed| F
-    G -->|Generates New Insights| H
-    H -->|Refines AI Models| A
+    A[1. Data Ingestion<br>ASTRAM & Traffic]:::step --> B[2. AI Hotspot Detection<br>HDBSCAN Clustering]:::step
+    
+    B --> C[3A. Impact Analysis<br>Traffic & CO2]:::step
+    B --> D[3B. Risk Forecasting<br>Predictive Machine Learning]:::step
+    
+    C --> E[4. Smart Dispatch<br>Route Optimization]:::step
+    D --> E
+    
+    E --> F[5. Field Execution<br>Officers Clear Blockages]:::step
+    
+    F --> G[6. Live Dashboard<br>Command Center]:::dash
+    
+    G -.->|Continuous Feedback Loop| A
 ```
 
 
