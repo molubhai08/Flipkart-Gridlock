@@ -28,6 +28,14 @@ Processing 298,450 anonymized violation records from the ASTRAM Traffic Manageme
 
 ---
 
+## Technology Stack
+* **Frontend:** HTML5, CSS3 (Glassmorphism), JavaScript, Leaflet.js
+* **Backend:** Python 3.12, FastAPI, Uvicorn
+* **AI/ML:** Scikit-Learn (HDBSCAN), LightGBM, Genetic Algorithms
+* **API:** RESTful endpoints with LRU Caching
+
+---
+
 ## Key Innovations
 
 We decouple structural traffic bottlenecks from
@@ -67,62 +75,36 @@ On-street illegal parking and spillover near commercial corridors, metro station
 EnforceIQ connects spatial clustering, transport engineering, supervised forecasting, and metaheuristic optimization in a unified operational dashboard.
 
 ```mermaid
-graph TB
+graph TD
     %% Styling configurations
-    classDef ingestion fill:#1f2937,stroke:#3b82f6,stroke-width:2px,color:#fff;
-    classDef processing fill:#1f2937,stroke:#a855f7,stroke-width:2px,color:#fff;
-    classDef ml_analytics fill:#1f2937,stroke:#10b981,stroke-width:2px,color:#fff;
-    classDef optimization fill:#1f2937,stroke:#f59e0b,stroke-width:2px,color:#fff;
-    classDef dashboard fill:#1f2937,stroke:#ef4444,stroke-width:2px,color:#fff;
+    classDef data fill:#3b82f6,stroke:#1e40af,stroke-width:2px,color:#fff,rx:10px,ry:10px;
+    classDef ai fill:#10b981,stroke:#047857,stroke-width:2px,color:#fff,rx:10px,ry:10px;
+    classDef action fill:#f59e0b,stroke:#b45309,stroke-width:2px,color:#fff,rx:10px,ry:10px;
+    classDef feedback fill:#ef4444,stroke:#b91c1c,stroke-width:2px,color:#fff,rx:10px,ry:10px;
 
-    subgraph INGESTION["I. DATA INTAKE LAYER"]
-        A1["ASTRAM Violations (298,450 records)"]:::ingestion
-        A2["ASTRAM Incidents (8,173 records)"]:::ingestion
-    end
+    %% Nodes
+    A[Data Ingestion: Gather Traffic & Parking Data]:::data
+    B[AI Hotspot Detection: Group Violations into Clusters]:::ai
+    C[Impact Analysis: Calculate Traffic & CO2 Impact]:::ai
+    D[Risk Forecasting: Predict Future High-Risk Zones]:::ai
+    E[Smart Dispatch: Generate Optimal Patrol Routes]:::action
+    F[Live Dashboard: Command Center Visualization]:::action
+    G[Field Execution: Officers Clear Bottlenecks & Log Actions]:::feedback
+    H[Continuous Feedback Loop: Data Refines AI]:::feedback
 
-    subgraph SPATIAL["II. GEOSPATIAL & ANALYTICAL PIPELINE"]
-        B1["DBSCAN/HDBSCAN Clustering"]:::processing
-        B2["Junction Cross-Reference (300m Bounding)"]:::processing
-        B3["Karachi LOS Formula"]:::processing
-        B4["Zaragoza HCE Model"]:::processing
-        
-        B1 --> B2
-        B2 --> B3
-        B2 --> B4
-    end
-
-    subgraph PREDICTIVE["III. MACHINE LEARNING ENGINE"]
-        C1["Spatiotemporal Feature Prep"]:::ml_analytics
-        C2["5-Fold LightGBM Ensemble"]:::ml_analytics
-        C3["Static Cache & live LRU Inference"]:::ml_analytics
-        
-        C1 --> C2
-        C2 --> C3
-    end
-
-    subgraph ROUTING["IV. PRESCRIPTIVE DISPATCH ENGINE"]
-        D1["Montreal Deterrence Decay Gap"]:::optimization
-        D2["Genetic Algorithm (OX Crossover & Mutation)"]:::optimization
-        
-        D1 --> D2
-    end
-
-    subgraph PRESENTATION["V. COMMAND & CONTROL HUB"]
-        E1["Interactive Leaflet Dashboard"]:::dashboard
-        E2["Operational Squad Schedules"]:::dashboard
-    end
-
-    %% Cross-layer links
-    A1 --> B1
-    A1 --> C1
-    A2 --> B2
-    
-    B3 --> D2
-    C3 --> D2
-    
-    D2 --> E2
-    B3 --> E1
-    C3 --> E1
+    %% Connections
+    A -->|Feeds Data| B
+    B -->|Identifies Hotspots| C
+    B -->|Trains Models| D
+    C -->|Provides Severity| E
+    D -->|Provides Forecasts| E
+    C -->|Shows Real-time Stats| F
+    D -->|Shows Predictions| F
+    E -->|Sends Routes & Tasks| G
+    E -->|Updates Squad Status| F
+    G -->|Updates Dashboard Feed| F
+    G -->|Generates New Insights| H
+    H -->|Refines AI Models| A
 ```
 
 
@@ -158,7 +140,8 @@ Patrol scheduling is modeled as a constrained optimization problem. Instead of t
 ### 5. Automated Dispatch & Communication
 To bridge the gap between AI generation and real-world execution, EnforceIQ features an automated dispatch prototype:
 * **Direct-to-Authority Emailing**: Once the Genetic Algorithm finalizes the most efficient patrol routes, the system automatically compiles and emails the exact step-by-step itineraries directly to the relevant police authorities and patrol squads.
-* **Closing the Action Loop**: This ensures the predictive intelligence doesn't just sit on a dashboard, but is actively pushed to the officers on the ground who can clear the bottlenecks.
+* **Live Dispatch & Field Activity (New Feature)**: A live activity ticker on the dashboard that aggregates logged events, showing police dispatches, field actions taken (tow, ticket, clear), and squad status updates.
+* **Closing the Action Loop**: This ensures the predictive intelligence doesn't just sit on a dashboard, but is actively pushed to the officers on the ground who can clear the bottlenecks, while keeping command updated in real-time.
 
 ---
 
