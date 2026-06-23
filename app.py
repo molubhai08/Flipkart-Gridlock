@@ -91,7 +91,7 @@ if _predictions_path.exists():
         for _h_str, _dows in _hours.items():
             for _d_str, _val in _dows.items():
                 PRED_CACHE[(_jname, int(_h_str), int(_d_str))] = float(_val)
-    print(f"✓ Prediction cache warmed: {len(PRED_CACHE):,} entries (LightGBM)")
+    print(f"[OK] Prediction cache warmed: {len(PRED_CACHE):,} entries (LightGBM)")
 
 # Load model.pkl for live inference (optional — used only by /api/predict/live)
 _model_path = DATA_DIR / "model.pkl"
@@ -99,17 +99,17 @@ if _model_path.exists():
     try:
         with open(_model_path, "rb") as f:
             MODEL_DATA = pickle.load(f)
-        print(f"✓ LightGBM 5-fold ensemble loaded  "
-              f"R²={MODEL_DATA.get('r2', '?')}  MAE={MODEL_DATA.get('mae', '?')}")
+        print(f"[OK] LightGBM 5-fold ensemble loaded  "
+              f"R2={MODEL_DATA.get('r2', '?')}  MAE={MODEL_DATA.get('mae', '?')}")
         print(f"  Features: {MODEL_DATA.get('features', [])}")
     except Exception as e:
-        print(f"⚠ Failed to load model.pkl ({e}) — live inference unavailable, serving from cache only")
+        print(f"[WARN] Failed to load model.pkl ({e}) -- live inference unavailable, serving from cache only")
         MODEL_DATA = None
 else:
-    print("⚠  model.pkl not found — live inference unavailable, serving from cache only")
+    print("[WARN] model.pkl not found -- live inference unavailable, serving from cache only")
 
-print(f"✓ Loaded {len(JUNCTIONS)} junctions")
-print(f"✓ Heatmap: {len(HEATMAP_DF):,} records")
+print(f"[OK] Loaded {len(JUNCTIONS)} junctions")
+print(f"[OK] Heatmap: {len(HEATMAP_DF):,} records")
 
 
 # ── ML inference helper ───────────────────────────────────────────────────────
@@ -289,6 +289,21 @@ def get_predictions_live(
             })
     results.sort(key=lambda x: x["predicted_count"], reverse=True)
     return results[:10]
+
+
+# ── PREDICTIONS ALL — full precomputed cache for frontend simulation ──────────
+@app.get("/api/predictions-all")
+def get_predictions_all():
+    """
+    Returns the full precomputed predictions.json structure so the frontend
+    can drive the per-hour heatmap simulation without making per-junction calls.
+    Shape: { jname: { hour_str: { dow_str: float } } }
+    """
+    # Rebuild nested dict from the flat PRED_CACHE keyed by (jname, hour, dow)
+    out: dict = {}
+    for (jname, hour, dow), val in PRED_CACHE.items():
+        out.setdefault(jname, {}).setdefault(str(hour), {})[str(dow)] = val
+    return out
 
 
 # ── MODEL INFO endpoint ───────────────────────────────────────────────────────
@@ -601,6 +616,109 @@ def get_physics(name: str):
         "v_bottleneck_kmh":      round(max(0, v_bottleneck), 1),
         "los_grade":             data.get("los_grade", "?"),
         "model": "Greenshields + LWR (Lighthill-Whitham-Richards 1955)"
+    }
+
+
+# ── Analytics Dashboard Endpoint ─────────────────────────────────────────────
+@app.get("/api/dashboard")
+def get_dashboard():
+    """
+    Single-call city-wide analytics endpoint for the Dashboard tab.
+    Aggregates LOS distribution, throughput loss, CO₂, LWR shockwave ranking,
+    month-over-month trend signals, and LightGBM predictions for the current hour.
+    All data is served from pre-loaded in-memory dicts — O(N) over junctions.
+    """
+    import datetime
+    now  = datetime.datetime.now()
+    hour = now.hour
+    dow  = now.weekday()
+
+    los_dist            = {"A": 0, "B": 0, "C": 0, "D": 0, "E": 0, "F": 0}
+    total_throughput    = 0
+    total_co2           = 0.0
+    intervention_counts = {"RESTRUCTURE": 0, "ENFORCE": 0, "PROCESS FIX": 0}
+    null_rates          = []
+    trend_data          = []
+    shockwave_top       = []
+
+    for jname, d in JUNCTIONS.items():
+        g = d.get("los_grade", "A")
+        los_dist[g] = los_dist.get(g, 0) + 1
+        total_throughput += d.get("throughput_loss", 0)
+        total_co2        += d.get("co2_kg_per_hour", 0.0)
+        itype = d.get("intervention_type", "ENFORCE")
+        intervention_counts[itype] = intervention_counts.get(itype, 0) + 1
+        null_rates.append(d.get("null_rate", 0))
+
+        # Month-over-month trend (CUSUM-style directional signal)
+        trend = d.get("monthly_trend", [])
+        if len(trend) >= 2:
+            last, prev = trend[-1]["count"], trend[-2]["count"]
+            change_pct = ((last - prev) / (prev + 1)) * 100
+            direction  = "rising" if change_pct > 15 else ("fading" if change_pct < -15 else "stable")
+            trend_data.append({
+                "name":             jname,
+                "change_pct":       round(change_pct, 1),
+                "direction":        direction,
+                "los_grade":        d.get("los_grade", "A"),
+                "total_violations": d.get("total_violations", 0),
+            })
+
+        # LWR shockwave — precomputed in preprocess.py, top-20 flagged
+        if d.get("is_top_shockwave"):
+            shockwave_top.append({
+                "name":                   jname,
+                "queue_length_km":        d.get("queue_length_km", 0),
+                "shockwave_velocity_kmh": d.get("shockwave_velocity_kmh", 0),
+                "v_bottleneck_kmh":       d.get("v_bottleneck_kmh", 0),
+                "los_grade":              d.get("los_grade", "A"),
+                "capacity_lost_pct":      d.get("capacity_lost_pct", 0),
+            })
+
+    shockwave_top.sort(key=lambda x: x["queue_length_km"], reverse=True)
+
+    rising = sorted([t for t in trend_data if t["direction"] == "rising"],
+                    key=lambda x: x["change_pct"], reverse=True)[:5]
+    fading = sorted([t for t in trend_data if t["direction"] == "fading"],
+                    key=lambda x: x["change_pct"])[:3]
+
+    # LightGBM predictions for the current hour (from pre-warmed PRED_CACHE)
+    predictions = []
+    for jname, jdata in JUNCTIONS.items():
+        pred = PRED_CACHE.get((jname, hour, dow), 0.0)
+        if pred > 0:
+            predictions.append({
+                "name":              jname,
+                "predicted_count":   round(pred, 1),
+                "confidence_low":    round(pred * 0.80, 1),
+                "confidence_high":   round(pred * 1.20, 1),
+                "los_grade":         jdata.get("los_grade", "A"),
+                "intervention_type": jdata.get("intervention_type", "ENFORCE"),
+            })
+    predictions.sort(key=lambda x: x["predicted_count"], reverse=True)
+
+    city_los      = max(los_dist, key=los_dist.get) if any(los_dist.values()) else "F"
+    critical_cnt  = los_dist.get("E", 0) + los_dist.get("F", 0)
+    avg_null_rate = round(sum(null_rates) / len(null_rates), 1) if null_rates else 0
+    model_info    = {"r2": MODEL_DATA.get("r2"), "mae": MODEL_DATA.get("mae")} if MODEL_DATA else {}
+
+    return {
+        "timestamp":             now.isoformat(),
+        "current_hour":          hour,
+        "current_dow":           dow,
+        "city_los":              city_los,
+        "los_distribution":      los_dist,
+        "total_throughput_loss": total_throughput,
+        "total_co2_kg_hr":       round(total_co2, 1),
+        "critical_junctions":    critical_cnt,
+        "avg_null_rate":         avg_null_rate,
+        "intervention_counts":   intervention_counts,
+        "shockwave_top":         shockwave_top[:8],
+        "rising_junctions":      rising,
+        "fading_junctions":      fading,
+        "predictions":           predictions[:6],
+        "model_info":            model_info,
+        "total_junctions":       len(JUNCTIONS),
     }
 
 

@@ -40,7 +40,7 @@ except ImportError:
 # ── paths ──────────────────────────────────────────────────────────────────
 BASE_DIR    = Path(__file__).parent
 DATA_DIR    = BASE_DIR / "data"
-VIOLATIONS_CSV = BASE_DIR.parent / "jan to may police violation_anonymized791b166.csv"
+VIOLATIONS_CSV = BASE_DIR / "jan to may police violation_anonymized791b166.csv"
 
 DATA_DIR.mkdir(exist_ok=True)
 
@@ -315,6 +315,21 @@ for cid in range(n_clusters):
     # ── CO2 (Zaragoza methodology) ──
     co2_kg_per_hour = round(peak_hour_count * 4.5 * 0.066, 2)
 
+    # ── LWR Shockwave Physics (Greenshields + Lighthill-Whitham-Richards 1955) ──
+    _ff    = 50.0           # free-flow speed km/h (urban arterial)
+    _kj    = 120.0          # jam density veh/km/lane
+    _k_bn  = _kj * (1.0 - (effective_lanes / assumed_lanes) * 0.5)
+    _v_bn  = _ff * (1.0 - _k_bn / _kj)
+    _q_bn  = _k_bn * _v_bn
+    _k_nm  = 30.0           # normal upstream density
+    _v_nm  = _ff * (1.0 - _k_nm / _kj)
+    _q_nm  = _k_nm * _v_nm
+    _denom = _k_bn - _k_nm
+    _omega = (_q_bn - _q_nm) / _denom if _denom != 0 else 0.0
+    queue_length_km        = max(0.0, round(-_omega,  2))
+    shockwave_velocity_kmh = round(_omega, 2)
+    v_bottleneck_kmh       = round(max(0.0, _v_bn), 1)
+
     # ── intervention classification ──
     tw_count = sum(veh_counts.get(v, 0) for v in TWO_WHEELERS)
     tw_pct   = tw_count / (total_j + 1) * 100
@@ -361,13 +376,24 @@ for cid in range(n_clusters):
         "los_grade":          los,
         "throughput_loss":    throughput_loss,
         "capacity_lost_pct":  capacity_lost_pct,
-        "co2_kg_per_hour":    co2_kg_per_hour,
-        "tw_pct":             round(tw_pct, 1),
-        "intervention_type":  itype,
-        "recommendation":     recommend,
-        "precedent":          precedent,
-        "estimated_impact":   est_impact,
+        "co2_kg_per_hour":        co2_kg_per_hour,
+        "tw_pct":                 round(tw_pct, 1),
+        "intervention_type":      itype,
+        "recommendation":         recommend,
+        "precedent":              precedent,
+        "estimated_impact":       est_impact,
+        "queue_length_km":        queue_length_km,
+        "shockwave_velocity_kmh": shockwave_velocity_kmh,
+        "v_bottleneck_kmh":       v_bottleneck_kmh,
+        "is_top_shockwave":       False,   # updated after all clusters computed
     }
+
+# ── Mark top-20 junctions by LWR queue length (used by dashboard API) ──
+_sw_sorted = sorted(junctions.keys(),
+                    key=lambda k: junctions[k].get("queue_length_km", 0),
+                    reverse=True)
+for _i, _k in enumerate(_sw_sorted):
+    junctions[_k]["is_top_shockwave"] = (_i < 20)
 
 with open(DATA_DIR / "junction_aggregates.json", "w") as f:
     json.dump(junctions, f)

@@ -1,1 +1,1 @@
-{"total_violations": 248691, "null_validation_count": 125249, "null_validation_pct": 50.4, "actions_taken": 123442, "enforcement_efficiency": 49.6, "model_mae": 0.986, "model_r2": 0.81, "model_type": "LightGBM 5-Fold Ensemble", "n_clusters": 1022, "n_noise_pts": 49527}
+{"total_violations": 248691, "null_validation_count": 125249, "null_validation_pct": 50.4, "actions_taken": 123442, "enforcement_efficiency": 49.6}

@@ -1096,9 +1096,19 @@ function setupNavTabs() {
         target.classList.add('active');
       }
 
-      // invalidate map size after tab switch
-      setTimeout(() => {
-        if (tab === 'map')           mainMap.invalidateSize();
+      // lazy-load per-tab data / maps
+      setTimeout(async () => {
+        if (tab === 'dashboard')     loadDashboard();
+        if (tab === 'map') {
+          if (!mainMap) {
+            initMainMap();
+            mainMap.invalidateSize();
+            await loadJunctions();
+            await updateHeatmap();
+          } else {
+            mainMap.invalidateSize();
+          }
+        }
         if (tab === 'predict')       { initPredictMap(); loadPredictions(); }
         if (tab === 'patrol')        initPatrolMap();
         if (tab === 'interventions') loadInterventions();
@@ -1496,34 +1506,33 @@ function setupPatrolSimulation() {
 
 // ── Init ──────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  initMainMap();
   setupNavTabs();
   setupFilters();
   setupSimulation();
   setupPatrolSimulation();
   setupUIInteractions();
   setupLayerController();
+  // NOTE: initMainMap() is now lazy — called on first MAP tab click
+  //       so the hidden map container doesn't crash Leaflet on startup.
 
   await Promise.all([
     loadKPIs(),
     loadFilterOptions(),
-    fetch(`${BASE}/api/predictions-all`).then(r => r.json()).then(d => { PREDICTIONS_JS = d; }),
+    fetch(`${BASE}/api/predictions-all`).then(r => r.ok ? r.json() : {}).then(d => { PREDICTIONS_JS = d; }).catch(() => {}),
+    loadDashboard(),
   ]);
 
-  // Small delay to ensure map container is fully painted
-  setTimeout(async () => {
-    mainMap.invalidateSize();
-    await loadJunctions();
-    await updateHeatmap();
-
-    // dismiss welcome banner on first junction click or manual dismiss
+  // Map is lazy-initialized on first MAP tab click — nothing to do here
+  // Auto-dismiss welcome banner after 12 seconds (banner is in map tab)
+  setTimeout(() => {
     const banner = document.getElementById('map-welcome-banner');
-    document.getElementById('banner-dismiss').addEventListener('click', () => {
-      banner.classList.add('dismissed');
-    });
-    // auto-dismiss after 12 seconds
-    setTimeout(() => banner.classList.add('dismissed'), 12000);
-  }, 200);
+    if (banner) {
+      document.getElementById('banner-dismiss')?.addEventListener('click', () => {
+        banner.classList.add('dismissed');
+      });
+      setTimeout(() => banner.classList.add('dismissed'), 12000);
+    }
+  }, 500);
 });
 
 
@@ -2273,4 +2282,223 @@ if (_origJpName) {
     }
   });
   jpObserver.observe(_origJpName, { childList: true, characterData: true, subtree: true });
+}
+
+/* =========================================================
+   ANALYTICS DASHBOARD — City Situation Report
+   Single /api/dashboard call, O(N) aggregation on server.
+   Uses: LOS (Karachi 2024), CO₂ (Zaragoza), LWR (1955),
+         LightGBM 5-Fold predictions, CUSUM trend signals.
+   ========================================================= */
+
+async function loadDashboard() {
+  try {
+    const data = await fetch(`${BASE}/api/dashboard`).then(r => r.json());
+    renderDashKPIs(data);
+    renderLOSDonut(data.los_distribution, data.total_junctions);
+    renderEmergingRadar(data.rising_junctions, data.fading_junctions);
+    renderShockwaveList(data.shockwave_top);
+    renderDashForecast(data.predictions, data.model_info);
+    renderEnforcementBars(data.intervention_counts, data.total_junctions);
+    renderDashActionStrip(data.intervention_counts);
+  } catch (e) {
+    console.warn('Dashboard load failed:', e);
+  }
+}
+
+// ── KPI Strip ─────────────────────────────────────────────
+function renderDashKPIs(d) {
+  const LOS_COLORS = { A:'#22c55e', B:'#86efac', C:'#eab308', D:'#f97316', E:'#ef4444', F:'#7f1d1d' };
+
+  const losEl = document.getElementById('d-city-los');
+  if (losEl) {
+    losEl.textContent = `LOS ${d.city_los}`;
+    losEl.style.color = LOS_COLORS[d.city_los] || '#f1f5f9';
+  }
+
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+  set('d-capacity-lost', d.total_throughput_loss != null ? d.total_throughput_loss.toLocaleString('en-IN') : '—');
+  set('d-co2', d.total_co2_kg_hr != null ? d.total_co2_kg_hr.toLocaleString('en-IN') : '—');
+
+  const critEl = document.getElementById('d-critical');
+  if (critEl) {
+    critEl.textContent = d.critical_junctions;
+    critEl.style.color = d.critical_junctions > 200 ? '#ef4444' : '#f97316';
+  }
+
+  const nullEl = document.getElementById('d-null-rate');
+  if (nullEl) {
+    nullEl.textContent = `${d.avg_null_rate}%`;
+    nullEl.style.color = d.avg_null_rate > 40 ? '#ef4444' : '#eab308';
+  }
+}
+
+// ── LOS Donut (pure SVG) ──────────────────────────────────
+function renderLOSDonut(dist, total) {
+  const container = document.getElementById('los-donut-container');
+  const legend    = document.getElementById('los-legend');
+  if (!container || !legend) return;
+
+  const grades = ['F', 'E', 'D', 'C', 'B', 'A'];
+  const colors = { A:'#22c55e', B:'#86efac', C:'#eab308', D:'#f97316', E:'#ef4444', F:'#7f1d1d' };
+  const labels = {
+    A: 'LOS A (Free flow)', B: 'LOS B (Good)', C: 'LOS C (Fair)',
+    D: 'LOS D (Slow)',      E: 'LOS E (Heavy)', F: 'LOS F (Critical)'
+  };
+
+  const tot = Object.values(dist).reduce((s, v) => s + v, 0) || 1;
+  const R = 50, cx = 60, cy = 60, SW = 18;
+  const circ = 2 * Math.PI * R;
+
+  // start from 12-o'clock
+  let offset = -(circ * 0.25);
+  let circles = `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#0f172a" stroke-width="${SW}"/>`;
+
+  for (const g of grades) {
+    const frac = (dist[g] || 0) / tot;
+    const dash = frac * circ;
+    circles += `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${colors[g]}"
+      stroke-width="${SW}" stroke-dasharray="${dash.toFixed(2)} ${(circ - dash).toFixed(2)}"
+      stroke-dashoffset="${offset.toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>`;
+    offset -= dash;
+  }
+
+  const crit    = (dist.E || 0) + (dist.F || 0);
+  const critPct = Math.round(crit / tot * 100);
+  circles += `<text x="${cx}" y="${cy - 4}" text-anchor="middle" fill="#f1f5f9" font-size="14" font-weight="700" font-family="Inter,sans-serif">${critPct}%</text>`;
+  circles += `<text x="${cx}" y="${cy + 10}" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="Inter,sans-serif">critical</text>`;
+
+  container.innerHTML =
+    `<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">${circles}</svg>`;
+
+  legend.innerHTML = grades.map(g => {
+    const pct = Math.round((dist[g] || 0) / tot * 100);
+    return `<div class="los-legend-item">
+      <div class="los-legend-dot" style="background:${colors[g]}"></div>
+      <span>${labels[g]}</span>
+      <span class="los-legend-pct">${pct}%</span>
+    </div>`;
+  }).join('');
+}
+
+// ── Emerging Radar ────────────────────────────────────────
+function renderEmergingRadar(rising, fading) {
+  const rEl = document.getElementById('radar-rising-list');
+  const fEl = document.getElementById('radar-fading-list');
+  if (!rEl || !fEl) return;
+
+  const makeItem = (item, dir) => {
+    const sign  = dir === 'rising' ? '+' : '';
+    const label = `${sign}${item.change_pct.toFixed(0)}%`;
+    const losColors = { F:'#7f1d1d', E:'#ef4444', D:'#f97316', C:'#eab308', B:'#86efac', A:'#22c55e' };
+    return `<div class="radar-item">
+      <span class="radar-item-name" title="${item.name}">${item.name}</span>
+      <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:${losColors[item.los_grade]}22;color:${losColors[item.los_grade]};font-weight:700">LOS ${item.los_grade}</span>
+      <span class="radar-badge ${dir}">${dir === 'rising' ? '▲' : '▼'} ${label}</span>
+    </div>`;
+  };
+
+  rEl.innerHTML = rising && rising.length
+    ? rising.slice(0, 4).map(j => makeItem(j, 'rising')).join('')
+    : '<div style="color:#475569;font-size:11px;padding:4px 0">No rapidly rising junctions detected</div>';
+
+  fEl.innerHTML = fading && fading.length
+    ? fading.slice(0, 3).map(j => makeItem(j, 'fading')).join('')
+    : '<div style="color:#475569;font-size:11px;padding:4px 0">No rapidly fading junctions</div>';
+}
+
+// ── Shockwave List ────────────────────────────────────────
+function renderShockwaveList(topList) {
+  const el = document.getElementById('shockwave-list');
+  if (!el) return;
+  if (!topList || !topList.length) {
+    el.innerHTML = '<div style="color:#475569;font-size:11px;padding:8px 0">Re-run preprocess.py to populate shockwave data.</div>';
+    return;
+  }
+  const maxQ = topList[0].queue_length_km || 1;
+  el.innerHTML = topList.slice(0, 6).map(item => {
+    const pct = Math.min(100, (item.queue_length_km / maxQ) * 100).toFixed(1);
+    const color = item.queue_length_km >= 1 ? '#ef4444' : item.queue_length_km >= 0.5 ? '#f97316' : '#a78bfa';
+    return `<div class="shock-item">
+      <span class="shock-name" title="${item.name}">${item.name}</span>
+      <div class="shock-bar-wrap">
+        <div class="shock-bar-fill" style="width:${pct}%;background:${color}"></div>
+      </div>
+      <span class="shock-queue-val" style="color:${color}">${item.queue_length_km} km</span>
+    </div>`;
+  }).join('');
+}
+
+// ── Forecast with Confidence Bars ────────────────────────
+function renderDashForecast(preds, modelInfo) {
+  const el    = document.getElementById('forecast-list');
+  const badge = document.getElementById('dash-model-badge');
+  const sub   = document.getElementById('dash-forecast-sub');
+  if (!el) return;
+
+  if (modelInfo && modelInfo.r2 != null && badge) {
+    badge.textContent = `LightGBM 5-Fold · R²=${modelInfo.r2} · MAE=${modelInfo.mae} viol/hr`;
+  }
+  if (sub) {
+    const now = new Date();
+    sub.textContent = `Hour ${now.getHours()}:00 forecast · ±20% confidence band (proxy until full conformal calibration)`;
+  }
+
+  if (!preds || !preds.length) {
+    el.innerHTML = '<div style="color:#475569;font-size:11px;padding:8px 0">No predictions cached for current hour. Try a different time in the PREDICT tab.</div>';
+    return;
+  }
+
+  const maxP = preds[0].confidence_high || 1;
+  el.innerHTML = preds.slice(0, 5).map(p => {
+    const midPct  = Math.min(100, ((p.predicted_count / maxP) * 100)).toFixed(1);
+    const lowPct  = Math.min(100, ((p.confidence_low  / maxP) * 100)).toFixed(1);
+    const highPct = Math.min(100, ((p.confidence_high / maxP) * 100)).toFixed(1);
+    const rangePx = Math.max(2, parseFloat(highPct) - parseFloat(lowPct));
+    return `<div class="forecast-item">
+      <div class="forecast-name">${p.name}</div>
+      <div class="forecast-bar-row">
+        <div class="forecast-bar-wrap">
+          <div class="forecast-bar-range" style="left:${lowPct}%;width:${rangePx.toFixed(1)}%"></div>
+          <div class="forecast-bar-point" style="left:${midPct}%"></div>
+        </div>
+        <span class="forecast-val">${p.confidence_low}–${p.confidence_high}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Enforcement Breakdown Bars ────────────────────────────
+function renderEnforcementBars(counts, total) {
+  const el = document.getElementById('enforcement-bars');
+  if (!el) return;
+
+  const items = [
+    { label: 'ENFORCE',     count: counts.ENFORCE     || 0, color: '#3b82f6' },
+    { label: 'RESTRUCTURE', count: counts.RESTRUCTURE || 0, color: '#f97316' },
+    { label: 'PROCESS FIX', count: counts['PROCESS FIX'] || 0, color: '#ef4444' },
+  ];
+  const maxCount = Math.max(...items.map(i => i.count), 1);
+  const tot = total || 1;
+
+  el.innerHTML = items.map(item => {
+    const barPct   = ((item.count / maxCount) * 100).toFixed(1);
+    const sharePct = ((item.count / tot) * 100).toFixed(0);
+    return `<div class="enf-bar-item">
+      <div class="enf-bar-label">${item.label}</div>
+      <div class="enf-bar-track">
+        <div class="enf-bar-fill" style="width:${barPct}%;background:${item.color}40;border-right:2px solid ${item.color}"></div>
+      </div>
+      <div class="enf-bar-count">${item.count.toLocaleString('en-IN')} <span style="color:#475569;font-weight:400;font-size:10px">(${sharePct}%)</span></div>
+    </div>`;
+  }).join('');
+}
+
+// ── Action Strip ──────────────────────────────────────────
+function renderDashActionStrip(counts) {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('dash-enforced-count',    `${(counts.ENFORCE || 0).toLocaleString('en-IN')} junctions need patrol today`);
+  set('dash-restructure-count', `${(counts.RESTRUCTURE || 0).toLocaleString('en-IN')} need infrastructure changes`);
+  set('dash-process-count',     `${(counts['PROCESS FIX'] || 0).toLocaleString('en-IN')} have broken evidence chains`);
 }
