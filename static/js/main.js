@@ -18,9 +18,10 @@ const state = {
   heatmapWeightMode: 'volume'
 };
 
-// ── Map instances ─────────────────────────────────────────
-let mainMap, predictMap, patrolMap;
-let mainHeatLayer, predictHeatLayer;
+// -- Map instances ---------------------------------------------------------
+let mainMap, predictMap, patrolMap, dashMiniMap;
+let mainHeatLayer, predictHeatLayer, dashMiniHeatLayer;
+let dashMiniMarkers = [];
 let junctionData  = [];   // flat array, populated by loadJunctions()
 let PREDICTIONS_JS = {};  // loaded once at startup for simulation
 
@@ -1717,12 +1718,19 @@ function switchToTab(tabName) {
   if (tab) { tab.classList.remove('hidden'); tab.classList.add('active'); }
 
   setTimeout(() => {
-    if (tabName === 'map')           mainMap.invalidateSize();
+    if (tabName === 'dashboard' && window.dashMiniMap) {
+      window.dashMiniMap.invalidateSize(true);
+      window.dispatchEvent(new Event('resize'));
+    }
+    if (tabName === 'map' && window.mainMap) {
+      window.mainMap.invalidateSize(true);
+    }
     if (tabName === 'predict')       { initPredictMap(); }
     if (tabName === 'patrol')        initPatrolMap();
     if (tabName === 'interventions') {}
-  }, 80);
+  }, 250);
 }
+
 
 // ── Countdown ring animation ─────────────────────────────────────
 function startCountdownRing(onDone) {
@@ -2285,15 +2293,111 @@ if (_origJpName) {
 }
 
 /* =========================================================
-   ANALYTICS DASHBOARD — City Situation Report
-   Single /api/dashboard call, O(N) aggregation on server.
-   Uses: LOS (Karachi 2024), CO₂ (Zaragoza), LWR (1955),
+   ANALYTICS DASHBOARD -- City Situation Report
+   Premium animated redesign.
+   Uses: LOS (Karachi 2024), CO2 (Zaragoza), LWR (1955),
          LightGBM 5-Fold predictions, CUSUM trend signals.
    ========================================================= */
 
+// -- Live Clock ----------------------------------------------------------
+function startDashClock() {
+  const DAYS = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
+  function tick() {
+    const now  = new Date();
+    const day  = DAYS[now.getDay()];
+    const hh   = now.getHours();
+    const mm   = String(now.getMinutes()).padStart(2, '0');
+    const ampm = hh >= 12 ? 'PM' : 'AM';
+    const h12  = ((hh % 12) || 12);
+    
+    // Original Header clock
+    const el = document.getElementById('dash-clock-text');
+    if (el) el.textContent = day + ', ' + h12 + ':' + mm + ' ' + ampm;
+    
+    // Large 3D card clock
+    const timeEl = document.getElementById('dash-clock-time');
+    const dayEl  = document.getElementById('dash-clock-day');
+    if (timeEl) timeEl.textContent = h12 + ':' + mm;
+    if (dayEl) dayEl.textContent = day + ' ' + ampm;
+  }
+  tick();
+  setInterval(tick, 15000);
+}
+
+// -- 3D Isometric City Grid ----------------------------------------------
+let _isoInterval = null;
+function init3DCityGrid() {
+  const container = document.getElementById('dash-iso-grid');
+  if (!container) return;
+  container.innerHTML = '';
+  if (_isoInterval) clearInterval(_isoInterval);
+  
+  // Create 6x6 grid of cubes
+  const size = 6;
+  const cubeW = 16;
+  const gap = 6;
+  const cubes = [];
+  
+  for (let x = 0; x < size; x++) {
+    for (let y = 0; y < size; y++) {
+      const cube = document.createElement('div');
+      cube.className = 'iso-cube';
+      cube.style.left = (x * (cubeW + gap)) + 'px';
+      cube.style.top  = (y * (cubeW + gap)) + 'px';
+      container.appendChild(cube);
+      cubes.push(cube);
+    }
+  }
+  
+  // Randomly animate heights
+  function animateGrid() {
+    const colors = [
+      ['rgba(59,130,246,0.8)', 'rgba(37,99,235,0.9)', 'rgba(29,78,216,0.95)'], // Blue
+      ['rgba(20,184,166,0.8)', 'rgba(13,148,136,0.9)', 'rgba(15,118,110,0.95)'], // Teal
+      ['rgba(249,115,22,0.8)', 'rgba(234,88,12,0.9)', 'rgba(194,65,12,0.95)'], // Orange
+      ['rgba(239,68,68,0.8)', 'rgba(220,38,38,0.9)', 'rgba(185,28,28,0.95)'] // Red (critical)
+    ];
+    cubes.forEach(c => {
+      // 25% chance to be "active" (tall + colored)
+      const isActive = Math.random() > 0.75;
+      const isCritical = isActive && Math.random() > 0.8;
+      
+      const h = isActive ? (isCritical ? 60 + Math.random()*20 : 30 + Math.random()*30) : (5 + Math.random()*10);
+      const colorSet = isActive ? (isCritical ? colors[3] : colors[Math.floor(Math.random() * 3)]) : colors[0];
+      
+      c.style.setProperty('--cube-h', h + 'px');
+      c.style.setProperty('--top-color', colorSet[0]);
+      c.style.setProperty('--front-color', colorSet[1]);
+      c.style.setProperty('--side-color', colorSet[2]);
+    });
+  }
+  
+  // Initial animation on next frame, then loop
+  setTimeout(animateGrid, 100);
+  _isoInterval = setInterval(animateGrid, 3000); // animate every 3 seconds
+}
+
+// -- Utility: smooth count-up -------------------------------------------
+function animateDashValue(el, target, duration, formatFn) {
+  if (!el) return;
+  const start = performance.now();
+  const isFloat = !Number.isInteger(target);
+  function tick(now) {
+    const p = Math.min((now - start) / duration, 1);
+    const e = 1 - Math.pow(1 - p, 3); // ease-out cubic
+    const v = e * target;
+    el.textContent = formatFn ? formatFn(v) : (isFloat ? v.toFixed(1) : Math.round(v).toLocaleString('en-IN'));
+    if (p < 1) requestAnimationFrame(tick);
+    else el.textContent = formatFn ? formatFn(target) : (isFloat ? target.toFixed(1) : Math.round(target).toLocaleString('en-IN'));
+  }
+  requestAnimationFrame(tick);
+}
+
+// -- Dashboard loader ----------------------------------------------------
 async function loadDashboard() {
   try {
-    const data = await fetch(`${BASE}/api/dashboard`).then(r => r.json());
+    startDashClock();
+    const data = await fetch(BASE + '/api/dashboard').then(r => r.json());
     renderDashKPIs(data);
     renderLOSDonut(data.los_distribution, data.total_junctions);
     renderEmergingRadar(data.rising_junctions, data.fading_junctions);
@@ -2301,114 +2405,148 @@ async function loadDashboard() {
     renderDashForecast(data.predictions, data.model_info);
     renderEnforcementBars(data.intervention_counts, data.total_junctions);
     renderDashActionStrip(data.intervention_counts);
+    initDashMiniMap();
+    init3DCityGrid();
   } catch (e) {
     console.warn('Dashboard load failed:', e);
   }
 }
 
-// ── KPI Strip ─────────────────────────────────────────────
+// -- KPI Strip -----------------------------------------------------------
 function renderDashKPIs(d) {
-  const LOS_COLORS = { A:'#22c55e', B:'#86efac', C:'#eab308', D:'#f97316', E:'#ef4444', F:'#7f1d1d' };
+  const LOS_COLORS = { A:'#22c55e', B:'#86efac', C:'#eab308', D:'#f97316', E:'#ef4444', F:'#dc2626' };
+  const color = LOS_COLORS[d.city_los] || '#f1f5f9';
 
+  // Hero LOS badge
   const losEl = document.getElementById('d-city-los');
   if (losEl) {
-    losEl.textContent = `LOS ${d.city_los}`;
-    losEl.style.color = LOS_COLORS[d.city_los] || '#f1f5f9';
+    losEl.innerHTML =
+      '<span class="los-badge-hero' + (['E','F'].includes(d.city_los) ? ' pulsing' : '') + '"' +
+      ' style="color:' + color + ';border-color:' + color + '">' +
+      d.city_los + '</span>';
   }
 
-  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-
-  set('d-capacity-lost', d.total_throughput_loss != null ? d.total_throughput_loss.toLocaleString('en-IN') : '—');
-  set('d-co2', d.total_co2_kg_hr != null ? d.total_co2_kg_hr.toLocaleString('en-IN') : '—');
-
+  // Animated count-up for numeric KPIs
+  const capEl  = document.getElementById('d-capacity-lost');
+  const co2El  = document.getElementById('d-co2');
   const critEl = document.getElementById('d-critical');
-  if (critEl) {
-    critEl.textContent = d.critical_junctions;
-    critEl.style.color = d.critical_junctions > 200 ? '#ef4444' : '#f97316';
-  }
-
   const nullEl = document.getElementById('d-null-rate');
-  if (nullEl) {
-    nullEl.textContent = `${d.avg_null_rate}%`;
+
+  if (capEl  && d.total_throughput_loss != null) animateDashValue(capEl, d.total_throughput_loss, 900);
+  if (co2El  && d.total_co2_kg_hr != null)       animateDashValue(co2El, d.total_co2_kg_hr, 1000);
+  if (critEl && d.critical_junctions != null) {
+    critEl.style.color = d.critical_junctions > 200 ? '#ef4444' : '#f97316';
+    animateDashValue(critEl, d.critical_junctions, 800);
+  }
+  if (nullEl && d.avg_null_rate != null) {
     nullEl.style.color = d.avg_null_rate > 40 ? '#ef4444' : '#eab308';
+    animateDashValue(nullEl, d.avg_null_rate, 850, v => Math.round(v) + '%');
   }
 }
 
-// ── LOS Donut (pure SVG) ──────────────────────────────────
+// -- LOS Donut (animated SVG draw-in) ------------------------------------
 function renderLOSDonut(dist, total) {
   const container = document.getElementById('los-donut-container');
   const legend    = document.getElementById('los-legend');
   if (!container || !legend) return;
 
-  const grades = ['F', 'E', 'D', 'C', 'B', 'A'];
-  const colors = { A:'#22c55e', B:'#86efac', C:'#eab308', D:'#f97316', E:'#ef4444', F:'#7f1d1d' };
+  const grades = ['F','E','D','C','B','A'];
+  const colors = { A:'#22c55e', B:'#86efac', C:'#eab308', D:'#f97316', E:'#ef4444', F:'#dc2626' };
   const labels = {
-    A: 'LOS A (Free flow)', B: 'LOS B (Good)', C: 'LOS C (Fair)',
-    D: 'LOS D (Slow)',      E: 'LOS E (Heavy)', F: 'LOS F (Critical)'
+    A:'LOS A (Free flow)', B:'LOS B (Good)', C:'LOS C (Fair)',
+    D:'LOS D (Slow)',      E:'LOS E (Heavy)', F:'LOS F (Critical)'
   };
 
-  const tot = Object.values(dist).reduce((s, v) => s + v, 0) || 1;
-  const R = 50, cx = 60, cy = 60, SW = 18;
+  const tot  = Object.values(dist).reduce((s,v) => s+v, 0) || 1;
+  const R = 50, cx = 60, cy = 60, SW = 16;
   const circ = 2 * Math.PI * R;
 
-  // start from 12-o'clock
-  let offset = -(circ * 0.25);
-  let circles = `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#0f172a" stroke-width="${SW}"/>`;
+  // Build all segments starting zeroed out, animate them in via CSS transition
+  let offset = 0;
+  let circles = '<circle cx="' + cx + '" cy="' + cy + '" r="' + R + '" fill="none" stroke="#0a1628" stroke-width="' + (SW+2) + '"/>';
 
-  for (const g of grades) {
+  // First pass: compute real dasharray values
+  const segs = grades.map(g => {
     const frac = (dist[g] || 0) / tot;
-    const dash = frac * circ;
-    circles += `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${colors[g]}"
-      stroke-width="${SW}" stroke-dasharray="${dash.toFixed(2)} ${(circ - dash).toFixed(2)}"
-      stroke-dashoffset="${offset.toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>`;
-    offset -= dash;
-  }
+    return { g, frac, dash: frac * circ };
+  });
 
-  const crit    = (dist.E || 0) + (dist.F || 0);
+  // Render zeroed-out circles; transition will animate to final width
+  let runOffset = -(circ * 0.25); // start at 12-o-clock
+  segs.forEach(s => {
+    circles += '<circle class="dash-segment" cx="' + cx + '" cy="' + cy + '" r="' + R + '" fill="none" stroke="' + colors[s.g] + '"' +
+      ' stroke-width="' + SW + '"' +
+      ' stroke-dasharray="0 ' + circ.toFixed(2) + '"' +
+      ' stroke-dashoffset="' + runOffset.toFixed(2) + '"' +
+      ' data-dash="' + s.dash.toFixed(2) + '"' +
+      ' data-gap="' + (circ - s.dash).toFixed(2) + '"' +
+      ' transform="rotate(-90 ' + cx + ' ' + cy + ')"' +
+      '/>';
+    runOffset -= s.dash;
+  });
+
+  const crit    = (dist.E||0) + (dist.F||0);
   const critPct = Math.round(crit / tot * 100);
-  circles += `<text x="${cx}" y="${cy - 4}" text-anchor="middle" fill="#f1f5f9" font-size="14" font-weight="700" font-family="Inter,sans-serif">${critPct}%</text>`;
-  circles += `<text x="${cx}" y="${cy + 10}" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="Inter,sans-serif">critical</text>`;
+  circles +=
+    '<text x="' + cx + '" y="' + (cy-5) + '" text-anchor="middle" fill="#f1f5f9" font-size="15" font-weight="800" font-family="Inter,sans-serif">' + critPct + '%</text>' +
+    '<text x="' + cx + '" y="' + (cy+9) + '" text-anchor="middle" fill="#64748b" font-size="8" font-family="Inter,sans-serif">critical</text>';
 
-  container.innerHTML =
-    `<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">${circles}</svg>`;
+  container.innerHTML = '<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">' + circles + '</svg>';
+
+  // Trigger animation: set real dasharray values after one paint frame
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const svgCircles = container.querySelectorAll('circle.dash-segment');
+    svgCircles.forEach((c, i) => {
+      const d = c.getAttribute('data-dash');
+      const gap = c.getAttribute('data-gap');
+      c.style.transition = 'stroke-dasharray 0.8s cubic-bezier(0.22,1,0.36,1) ' + (i * 0.07) + 's';
+      c.setAttribute('stroke-dasharray', d + ' ' + gap);
+    });
+  }));
 
   legend.innerHTML = grades.map(g => {
-    const pct = Math.round((dist[g] || 0) / tot * 100);
-    return `<div class="los-legend-item">
-      <div class="los-legend-dot" style="background:${colors[g]}"></div>
-      <span>${labels[g]}</span>
-      <span class="los-legend-pct">${pct}%</span>
-    </div>`;
+    const pct = Math.round((dist[g]||0)/tot*100);
+    return '<div class="los-legend-item">' +
+      '<div class="los-legend-dot" style="background:' + colors[g] + ';color:' + colors[g] + '"></div>' +
+      '<span>' + labels[g] + '</span>' +
+      '<span class="los-legend-pct">' + pct + '%</span>' +
+    '</div>';
   }).join('');
 }
 
-// ── Emerging Radar ────────────────────────────────────────
+// -- Emerging Radar ------------------------------------------------------
 function renderEmergingRadar(rising, fading) {
   const rEl = document.getElementById('radar-rising-list');
   const fEl = document.getElementById('radar-fading-list');
   if (!rEl || !fEl) return;
 
+  // Set class on section labels for colored pulse dot
+  const labels = document.querySelectorAll('.radar-section-label');
+  if (labels[0]) labels[0].classList.add('rising');
+  if (labels[1]) labels[1].classList.add('fading');
+
+  const losColors = { F:'#dc2626', E:'#ef4444', D:'#f97316', C:'#eab308', B:'#86efac', A:'#22c55e' };
   const makeItem = (item, dir) => {
     const sign  = dir === 'rising' ? '+' : '';
-    const label = `${sign}${item.change_pct.toFixed(0)}%`;
-    const losColors = { F:'#7f1d1d', E:'#ef4444', D:'#f97316', C:'#eab308', B:'#86efac', A:'#22c55e' };
-    return `<div class="radar-item">
-      <span class="radar-item-name" title="${item.name}">${item.name}</span>
-      <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:${losColors[item.los_grade]}22;color:${losColors[item.los_grade]};font-weight:700">LOS ${item.los_grade}</span>
-      <span class="radar-badge ${dir}">${dir === 'rising' ? '▲' : '▼'} ${label}</span>
-    </div>`;
+    const label = sign + item.change_pct.toFixed(0) + '%';
+    const c     = losColors[item.los_grade] || '#94a3b8';
+    return '<div class="radar-item">' +
+      '<span class="radar-item-name" title="' + item.name + '">' + item.name + '</span>' +
+      '<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:' + c + '22;color:' + c + ';font-weight:700">LOS ' + item.los_grade + '</span>' +
+      '<span class="radar-badge ' + dir + '">' + (dir==='rising'?'&#9650;':'&#9660;') + ' ' + label + '</span>' +
+    '</div>';
   };
 
   rEl.innerHTML = rising && rising.length
-    ? rising.slice(0, 4).map(j => makeItem(j, 'rising')).join('')
+    ? rising.slice(0,4).map(j => makeItem(j,'rising')).join('')
     : '<div style="color:#475569;font-size:11px;padding:4px 0">No rapidly rising junctions detected</div>';
 
   fEl.innerHTML = fading && fading.length
-    ? fading.slice(0, 3).map(j => makeItem(j, 'fading')).join('')
+    ? fading.slice(0,3).map(j => makeItem(j,'fading')).join('')
     : '<div style="color:#475569;font-size:11px;padding:4px 0">No rapidly fading junctions</div>';
 }
 
-// ── Shockwave List ────────────────────────────────────────
+// -- Shockwave List (animated bars) -------------------------------------
 function renderShockwaveList(topList) {
   const el = document.getElementById('shockwave-list');
   if (!el) return;
@@ -2417,20 +2555,27 @@ function renderShockwaveList(topList) {
     return;
   }
   const maxQ = topList[0].queue_length_km || 1;
-  el.innerHTML = topList.slice(0, 6).map(item => {
-    const pct = Math.min(100, (item.queue_length_km / maxQ) * 100).toFixed(1);
+  // Render bars with width:0 first, then animate
+  el.innerHTML = topList.slice(0,6).map(item => {
+    const pct   = Math.min(100, (item.queue_length_km / maxQ) * 100).toFixed(1);
     const color = item.queue_length_km >= 1 ? '#ef4444' : item.queue_length_km >= 0.5 ? '#f97316' : '#a78bfa';
-    return `<div class="shock-item">
-      <span class="shock-name" title="${item.name}">${item.name}</span>
-      <div class="shock-bar-wrap">
-        <div class="shock-bar-fill" style="width:${pct}%;background:${color}"></div>
-      </div>
-      <span class="shock-queue-val" style="color:${color}">${item.queue_length_km} km</span>
-    </div>`;
+    const glowClass = item.queue_length_km >= 1 ? 'glow-red' : item.queue_length_km >= 0.5 ? 'glow-orange' : '';
+    return '<div class="shock-item">' +
+      '<span class="shock-name" title="' + item.name + '">' + item.name + '</span>' +
+      '<div class="shock-bar-wrap"><div class="shock-bar-fill ' + glowClass + '" data-pct="' + pct + '" style="background:' + color + ';width:0"></div></div>' +
+      '<span class="shock-queue-val" style="color:' + color + '">' + item.queue_length_km + ' km</span>' +
+    '</div>';
   }).join('');
+
+  // Animate bars in
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    el.querySelectorAll('.shock-bar-fill').forEach((bar, i) => {
+      setTimeout(() => { bar.style.width = bar.dataset.pct + '%'; }, i * 80);
+    });
+  }));
 }
 
-// ── Forecast with Confidence Bars ────────────────────────
+// -- Forecast with Confidence Bars (animated) ----------------------------
 function renderDashForecast(preds, modelInfo) {
   const el    = document.getElementById('forecast-list');
   const badge = document.getElementById('dash-model-badge');
@@ -2438,46 +2583,46 @@ function renderDashForecast(preds, modelInfo) {
   if (!el) return;
 
   if (modelInfo && modelInfo.r2 != null && badge) {
-    badge.textContent = `LightGBM 5-Fold · R²=${modelInfo.r2} · MAE=${modelInfo.mae} viol/hr`;
+    badge.textContent = 'LightGBM 5-Fold  R2=' + modelInfo.r2 + '  MAE=' + modelInfo.mae + ' viol/hr';
   }
   if (sub) {
     const now = new Date();
-    sub.textContent = `Hour ${now.getHours()}:00 forecast · ±20% confidence band (proxy until full conformal calibration)`;
+    sub.textContent = 'Hour ' + now.getHours() + ':00 forecast  +-20% confidence band (proxy until full conformal calibration)';
   }
 
   if (!preds || !preds.length) {
-    el.innerHTML = '<div style="color:#475569;font-size:11px;padding:8px 0">No predictions cached for current hour. Try a different time in the PREDICT tab.</div>';
+    el.innerHTML = '<div style="color:#475569;font-size:11px;padding:8px 0">No predictions cached for current hour.</div>';
     return;
   }
 
   const maxP = preds[0].confidence_high || 1;
-  el.innerHTML = preds.slice(0, 5).map(p => {
-    const midPct  = Math.min(100, ((p.predicted_count / maxP) * 100)).toFixed(1);
-    const lowPct  = Math.min(100, ((p.confidence_low  / maxP) * 100)).toFixed(1);
-    const highPct = Math.min(100, ((p.confidence_high / maxP) * 100)).toFixed(1);
+  el.innerHTML = preds.slice(0,5).map(p => {
+    const midPct  = Math.min(100, (p.predicted_count  / maxP) * 100).toFixed(1);
+    const lowPct  = Math.min(100, (p.confidence_low   / maxP) * 100).toFixed(1);
+    const highPct = Math.min(100, (p.confidence_high  / maxP) * 100).toFixed(1);
     const rangePx = Math.max(2, parseFloat(highPct) - parseFloat(lowPct));
-    return `<div class="forecast-item">
-      <div class="forecast-name">${p.name}</div>
-      <div class="forecast-bar-row">
-        <div class="forecast-bar-wrap">
-          <div class="forecast-bar-range" style="left:${lowPct}%;width:${rangePx.toFixed(1)}%"></div>
-          <div class="forecast-bar-point" style="left:${midPct}%"></div>
-        </div>
-        <span class="forecast-val">${p.confidence_low}–${p.confidence_high}</span>
-      </div>
-    </div>`;
+    return '<div class="forecast-item">' +
+      '<div class="forecast-name">' + p.name + '</div>' +
+      '<div class="forecast-bar-row">' +
+        '<div class="forecast-bar-wrap">' +
+          '<div class="forecast-bar-range" style="left:' + lowPct + '%;width:' + rangePx.toFixed(1) + '%"></div>' +
+          '<div class="forecast-bar-point" style="left:' + midPct + '%"></div>' +
+        '</div>' +
+        '<span class="forecast-val">' + p.confidence_low + '-' + p.confidence_high + '</span>' +
+      '</div>' +
+    '</div>';
   }).join('');
 }
 
-// ── Enforcement Breakdown Bars ────────────────────────────
+// -- Enforcement Breakdown Bars (animated) -------------------------------
 function renderEnforcementBars(counts, total) {
   const el = document.getElementById('enforcement-bars');
   if (!el) return;
 
   const items = [
-    { label: 'ENFORCE',     count: counts.ENFORCE     || 0, color: '#3b82f6' },
-    { label: 'RESTRUCTURE', count: counts.RESTRUCTURE || 0, color: '#f97316' },
-    { label: 'PROCESS FIX', count: counts['PROCESS FIX'] || 0, color: '#ef4444' },
+    { label:'ENFORCE',     count: counts.ENFORCE     || 0, color:'#3b82f6' },
+    { label:'RESTRUCTURE', count: counts.RESTRUCTURE || 0, color:'#f97316' },
+    { label:'PROCESS FIX', count: counts['PROCESS FIX'] || 0, color:'#ef4444' },
   ];
   const maxCount = Math.max(...items.map(i => i.count), 1);
   const tot = total || 1;
@@ -2485,20 +2630,143 @@ function renderEnforcementBars(counts, total) {
   el.innerHTML = items.map(item => {
     const barPct   = ((item.count / maxCount) * 100).toFixed(1);
     const sharePct = ((item.count / tot) * 100).toFixed(0);
-    return `<div class="enf-bar-item">
-      <div class="enf-bar-label">${item.label}</div>
-      <div class="enf-bar-track">
-        <div class="enf-bar-fill" style="width:${barPct}%;background:${item.color}40;border-right:2px solid ${item.color}"></div>
-      </div>
-      <div class="enf-bar-count">${item.count.toLocaleString('en-IN')} <span style="color:#475569;font-weight:400;font-size:10px">(${sharePct}%)</span></div>
-    </div>`;
+    return '<div class="enf-bar-item">' +
+      '<div class="enf-bar-label">' + item.label + '</div>' +
+      '<div class="enf-bar-track">' +
+        '<div class="enf-bar-fill" data-pct="' + barPct + '" style="background:' + item.color + '40;border-right:2px solid ' + item.color + ';width:0"></div>' +
+      '</div>' +
+      '<div class="enf-bar-count">' + item.count.toLocaleString('en-IN') + ' <span style="color:#475569;font-weight:400;font-size:10px">(' + sharePct + '%)</span></div>' +
+    '</div>';
   }).join('');
+
+  // Animate bars
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    el.querySelectorAll('.enf-bar-fill').forEach((bar, i) => {
+      setTimeout(() => { bar.style.width = bar.dataset.pct + '%'; }, i * 120);
+    });
+  }));
 }
 
-// ── Action Strip ──────────────────────────────────────────
+// -- Action Strip --------------------------------------------------------
 function renderDashActionStrip(counts) {
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  set('dash-enforced-count',    `${(counts.ENFORCE || 0).toLocaleString('en-IN')} junctions need patrol today`);
-  set('dash-restructure-count', `${(counts.RESTRUCTURE || 0).toLocaleString('en-IN')} need infrastructure changes`);
-  set('dash-process-count',     `${(counts['PROCESS FIX'] || 0).toLocaleString('en-IN')} have broken evidence chains`);
+  set('dash-enforced-count',    (counts.ENFORCE     || 0).toLocaleString('en-IN') + ' junctions need patrol today');
+  set('dash-restructure-count', (counts.RESTRUCTURE || 0).toLocaleString('en-IN') + ' need infrastructure changes');
+  set('dash-process-count',     (counts['PROCESS FIX'] || 0).toLocaleString('en-IN') + ' have broken evidence chains');
 }
+
+// -- Mini Prediction Map -------------------------------------------------
+function initDashMiniMap() {
+  const container = document.getElementById('dash-mini-map');
+  if (!container) return;
+
+  if (window.dashMiniMap) {
+    // Already initialised — just fix size then refresh markers
+    setTimeout(() => {
+      window.dashMiniMap.invalidateSize();
+      renderDashMiniMapPredictions();
+    }, 100);
+    return;
+  }
+
+  window.dashMiniMap = L.map('dash-mini-map', {
+    zoomControl: false,
+    scrollWheelZoom: false,
+    dragging: true,
+    doubleClickZoom: false,
+  }).setView(BENGALURU, 12);
+
+  // Use the same tile factory as all other maps (Mappls or CartoDB dark)
+  smartTileLayer().addTo(window.dashMiniMap);
+
+  // Add heatmap layer (same configuration as predict tab)
+  window.dashMiniHeatLayer = L.heatLayer([], { radius: 25, blur: 20, maxZoom: 17, max: 2 }).addTo(window.dashMiniMap);
+
+  // Keep module-level aliases in sync for mappls-init.js patching and local use
+  dashMiniMap = window.dashMiniMap;
+  dashMiniHeatLayer = window.dashMiniHeatLayer;
+
+  // Robust fix for Leaflet grey tiles when resizing via Flexbox
+  setTimeout(() => {
+    window.dashMiniMap.invalidateSize(true);
+    window.dispatchEvent(new Event('resize'));
+    renderDashMiniMapPredictions();
+  }, 400);
+}
+
+async function renderDashMiniMapPredictions() {
+  const map = window.dashMiniMap || dashMiniMap;
+  if (!map) return;
+
+  // Current local hour & day-of-week (Mon=0 ... Sun=6)
+  const now    = new Date();
+  const hour   = now.getHours();
+  const jsDay  = now.getDay();              // JS: 0=Sun … 6=Sat
+  const dow    = jsDay === 0 ? 6 : jsDay - 1; // API: Mon=0 … Sun=6
+
+  const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const citeEl = document.getElementById('dash-map-cite');
+  if (citeEl) citeEl.textContent = 'Hour ' + hour + ':00  \u00b7  ' + DAYS[dow] + '  \u2014  live LightGBM inference';
+  const subEl = document.getElementById('dash-map-sub');
+  if (subEl) subEl.textContent = 'Top predicted violation hotspots right now  \u2014  LightGBM 5-Fold';
+
+  try {
+    const preds = await fetch(BASE + '/api/predict?hour=' + hour + '&dow=' + dow).then(r => r.json());
+
+    // Clear old markers and heat data
+    dashMiniMarkers.forEach(m => { try { map.removeLayer(m); } catch(e) {} });
+    dashMiniMarkers = [];
+    if (dashMiniHeatLayer) dashMiniHeatLayer.setLatLngs([]);
+
+    if (!preds || !preds.length) {
+      console.warn('Mini-map: no predictions for hour=' + hour + ' dow=' + dow);
+      return;
+    }
+
+    const maxCount = preds[0].predicted_count || 1;
+    const LOS_COLOR = { F:'#dc2626', E:'#ef4444', D:'#f97316', C:'#eab308', B:'#22c55e', A:'#86efac' };
+    const heatPts = [];
+
+    // Use top 20 for heatmap, top 10 for explicit markers
+    preds.slice(0, 20).forEach((p, idx) => {
+      if (!p.lat || !p.lon) return;
+      
+      // Add to heatmap
+      heatPts.push([p.lat, p.lon, p.predicted_count]);
+
+      // Add explicit markers for the top 10
+      if (idx < 10) {
+        const intensity = p.predicted_count / maxCount;
+        // Radius: 12-30px proportional to intensity
+        const radius = Math.max(12, Math.min(30, intensity * 30));
+        const color  = LOS_COLOR[p.los_grade] || '#3b82f6';
+
+        const m = L.circleMarker([p.lat, p.lon], {
+          radius,
+          fillColor:   color,
+          fillOpacity: 0.80,
+          weight:      2,
+          color:       color,
+          opacity:     1,
+        })
+        .bindTooltip(
+          '<b>' + p.name + '</b><br>' +
+          Math.round(p.predicted_count) + ' predicted violations<br>' +
+          'LOS ' + p.los_grade + ' &bull; ' + (p.intervention_type || ''),
+          { sticky: true, className: 'dash-mini-tooltip' }
+        )
+        .addTo(map);
+
+        dashMiniMarkers.push(m);
+      }
+    });
+
+    if (dashMiniHeatLayer) dashMiniHeatLayer.setLatLngs(heatPts);
+
+    console.log('Mini-map: rendered ' + dashMiniMarkers.length + ' markers and ' + heatPts.length + ' heat points');
+  } catch (e) {
+
+    console.warn('Mini-map prediction fetch failed:', e);
+  }
+}
+

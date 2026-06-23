@@ -59,11 +59,20 @@ window.getBaseTileLayer = function (type = 'standard') {
   return osmTileLayer();
 };
 
-/* ── Patch existing maps once they are created ───────────────────────────── */
+/* -- Patch existing maps once they are created ----------------------------- */
 function patchMapsWithMappls() {
-  // Poll until main.js has initialised the map globals
+  // Poll until main.js has initialised ALL map globals
+  // (mainMap is lazy-init on MAP tab; dashMiniMap on DASHBOARD load;
+  //  predictMap/patrolMap on their respective tabs)
+  const MAX_WAIT = 30000; // give up after 30 s
+  const start    = Date.now();
   const interval = setInterval(() => {
-    if (window.mainMap && window.predictMap && window.patrolMap) {
+    // dashMiniMap is the first to appear (dashboard is default tab)
+    // We swap as soon as at least dashMiniMap exists; the others get
+    // swapped when they are individually initialised later.
+    const anyReady = window.dashMiniMap || window.mainMap ||
+                     window.predictMap  || window.patrolMap;
+    if (anyReady || Date.now() - start > MAX_WAIT) {
       clearInterval(interval);
       swapTileLayers();
     }
@@ -71,13 +80,12 @@ function patchMapsWithMappls() {
 }
 
 function swapTileLayers() {
-  [window.mainMap, window.predictMap, window.patrolMap].forEach(map => {
+  // Include dashMiniMap alongside the other three map instances
+  [window.dashMiniMap, window.mainMap, window.predictMap, window.patrolMap].forEach(map => {
     if (!map) return;
-    // Remove all existing tile layers
     map.eachLayer(layer => {
       if (layer instanceof L.TileLayer) map.removeLayer(layer);
     });
-    // Add Mappls tile layer
     mapplsTileLayer().addTo(map);
   });
 
@@ -201,14 +209,25 @@ window.mapplsRoute = async function (waypoints) {
 
 /* ── Startup sequence ────────────────────────────────────────────────────── */
 (function init() {
-  // Try Mappls SDK load — test tile URL with HEAD request
+  // Try Mappls SDK load  test tile URL with HEAD request
   fetch(`https://apis.mappls.com/advancedmaps/v1/${MAPPLS_KEY}/still_map/12/2879/1761.png`, {
-    method: 'HEAD', mode: 'no-cors'
-  }).then(() => {
-    // SDK loaded — swap tiles once main.js creates map instances
+    method: 'HEAD'
+  }).then((res) => {
+    if (!res.ok) throw new Error('Mappls returned ' + res.status);
+    // SDK loaded  swap tiles once main.js creates map instances
     patchMapsWithMappls();
-  }).catch(() => {
-    console.warn('⚠ Mappls tiles unreachable — using OSM fallback');
+  }).catch((e) => {
+    console.warn('⚠ Mappls tiles unreachable — using fallback. Error:', e.message);
     window.MAPPLS_READY = false;
+    
+    // If Mappls fails, ensure the mini-map uses CartoDB Dark (since it looks better)
+    if (window.dashMiniMap) {
+      window.dashMiniMap.eachLayer(layer => {
+        if (layer instanceof L.TileLayer) window.dashMiniMap.removeLayer(layer);
+      });
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>'
+      }).addTo(window.dashMiniMap);
+    }
   });
 })();
